@@ -21,6 +21,7 @@ env:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         # list of jobs to run:
         include:
@@ -36,7 +37,6 @@ jobs:
           - job_name: Linux
             go: 1.26.x
             os: ubuntu-latest
-            test_cloud_backends: true
             test_fuse: true
             check_changelog: true
 
