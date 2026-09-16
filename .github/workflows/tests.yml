@@ -14,6 +14,8 @@ permissions:
 
 env:
   latest_go: "1.26.x"
+  # the last release of the open source MinIO server, see "install minio server" below
+  minio_version: "RELEASE.2025-10-15T17-29-55Z"
   GO111MODULE: on
 
 jobs:
@@ -70,15 +72,12 @@ jobs:
           go install github.com/restic/rest-server/cmd/rest-server@master
 
           echo "install minio server"
-          mkdir $HOME/bin
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            wget --no-verbose -O $HOME/bin/minio https://dl.minio.io/server/minio/release/darwin-amd64/minio
-          else
-            wget --no-verbose -O $HOME/bin/minio https://dl.minio.io/server/minio/release/linux-amd64/minio
-          fi
-          chmod 755 $HOME/bin/minio
+          # the prebuilt binaries are gone: the open source MinIO server is archived
+          # and dl.minio.io now answers "410 Gone", so build it from source instead
+          go install github.com/minio/minio@${{ env.minio_version }}
 
           echo "install rclone"
+          mkdir $HOME/bin
           if [ "$RUNNER_OS" == "macOS" ]; then
             wget --no-verbose -O rclone.zip https://downloads.rclone.org/rclone-current-osx-amd64.zip
           else
@@ -102,10 +101,10 @@ jobs:
           go install github.com/restic/rest-server/cmd/rest-server@master
 
           echo "install minio server"
-          mkdir $Env:USERPROFILE/bin
-          Invoke-WebRequest https://dl.minio.io/server/minio/release/windows-amd64/minio.exe -OutFile $Env:USERPROFILE/bin/minio.exe
+          go install github.com/minio/minio@${{ env.minio_version }}
 
           echo "install rclone"
+          mkdir $Env:USERPROFILE/bin
           Invoke-WebRequest https://downloads.rclone.org/rclone-current-windows-amd64.zip -OutFile rclone.zip
 
           unzip rclone.zip
