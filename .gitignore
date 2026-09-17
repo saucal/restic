@@ -3,3 +3,6 @@
 /restic.exe
 /.vagrant
 /.vscode
+
+# saucal/build-release.sh output
+/dist/
