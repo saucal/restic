@@ -1,11 +1,19 @@
 # The saucal build of restic
 
 `release/saucal` is what the maintenance action installs on WordPress hosts: an
-upstream release with our patches on top. Today that is `v0.19.1` plus one
-change — restic no longer hangs forever on filesystems that accept the
-preallocation syscall and never answer it, which is what Pressable does. Without
-it a restore there stops on the first file that needs data, leaves it empty, and
-cannot even be killed.
+upstream release with our patches on top. Today that is `v0.19.1` plus three
+changes:
+
+- **Preallocation.** restic no longer hangs forever on filesystems that accept
+  the preallocation syscall and never answer it, which is what Pressable does.
+  Without it a restore there stops on the first file that needs data, leaves it
+  empty, and cannot even be killed.
+- **Memory diagnostics.** `RESTIC_DIAG_LOG` writes a memory sample every ten
+  seconds, so a backup the host kills leaves an account of what it cost behind.
+  A kill leaves no error message, so without this there is nothing to read.
+- **Wide directories.** A directory with very many entries no longer costs about
+  a kilobyte of memory per entry. See below for what that buys and where the
+  remaining limit is.
 
 ## How the branches fit together
 
@@ -148,3 +156,32 @@ itself off everywhere, quietly costing performance on healthy filesystems. The
 release workflow smoke-tests it:
 
     restic --__preallocate-probe /tmp   ->   restic-preallocate-probe-answered
+
+The wide-directory fix is covered by `TestArchiverSaveDirWide`, which backs up a
+directory wider than `maxPendingNodes` and checks every entry still reaches the
+tree in order. Whoever changes `saveDir` should know the fix rests on the file
+saver's queue being unbuffered: the walk is already paced by the file readers, so
+consuming finished entries earlier costs no concurrency. Give the file saver a
+buffered queue and that stops being true.
+
+## What a wide directory still costs
+
+One directory of W entries needs roughly 0.8 KB per entry, down from 1.3 KB.
+Measured on a flat directory of zero-byte files with names as long as
+WordPress's, GOMAXPROCS=2 and GOGC=20, peak RSS:
+
+| entries | v0.19.1 | this build |
+| ------- | ------- | ---------- |
+| 400000  | 537 MB  | 359 MB     |
+| 1000000 | 1248 MB | 759 MB     |
+
+Under a hard 600 MB cap, 600000 entries in one directory failed before and
+succeeds now. Beyond that, `GOMEMLIMIT` matters: the transient buffers that
+compress and verify the tree are garbage, and without a limit Go grows the heap
+instead of collecting them. With `GOMEMLIMIT=450MiB`, 800000 entries succeed too.
+It cannot rescue the old build, whose cost was live rather than garbage.
+
+A million entries in one directory fails regardless, and that part is structural.
+A directory's tree is a single blob, so its ~300 MB of JSON must exist whole to be
+hashed, compressed and sealed — restic's blob encryption has no streaming form.
+No amount of tuning avoids that; the directory has to get smaller.
