@@ -62,6 +62,8 @@ func (s *treeSaver) Save(ctx context.Context, snPath string, target string, node
 	case s.ch <- job:
 	case <-ctx.Done():
 		debug.Log("not saving tree, context is cancelled")
+		// nobody will take the job, so its temp file is ours to close
+		builder.release()
 		close(ch)
 	}
 
@@ -143,11 +145,15 @@ func (tb *treeBuilder) finish() (buf []byte, rd io.Reader, size int64, err error
 	return nil, tb.spill, size, nil
 }
 
+// release closes the temp file holding a spilled tree. It is safe to call more
+// than once, and on a builder that never spilled.
 func (tb *treeBuilder) release() {
-	if tb.spill != nil {
-		_ = tb.spill.Close()
-		tb.spill = nil
+	if tb == nil || tb.spill == nil {
+		return
 	}
+	_ = tb.spill.Close()
+	tb.spill = nil
+	tb.spillW = nil
 }
 
 // add appends the result for one directory entry. A returned error aborts the
@@ -203,6 +209,9 @@ func (s *treeSaver) save(ctx context.Context, job *saveTreeJob) (*data.Node, Ite
 		tb = newTreeBuilder(s.errFn, len(nodes))
 	}
 	job.builder = nil
+	// Every path out of here has to close the temp file, including the error
+	// returns below and a cancellation that abandons the upload.
+	defer tb.release()
 
 	for i, fn := range nodes {
 		// fn is a copy, so clear the original value explicitly
@@ -216,7 +225,6 @@ func (s *treeSaver) save(ctx context.Context, job *saveTreeJob) (*data.Node, Ite
 	if err != nil {
 		return nil, stats, err
 	}
-	defer tb.release()
 
 	var (
 		known      bool
