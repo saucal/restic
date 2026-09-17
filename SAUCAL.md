@@ -17,10 +17,20 @@ cannot even be killed.
     repro/…           reproductions and evidence; nothing there ships
 
 Work meant for upstream starts on a branch off `master`, so its diff is against
-what upstream has. It reaches the fleet by being **cherry-picked** onto
-`release/saucal` — not merged: a master-based branch carries all of master with
-it, and `release/saucal` sits on a release tag, which is behind master. Only
-upstream's release tags are ever merged in, as below.
+what upstream has.
+
+It reaches the fleet through an integration branch cut from the release tag
+`release/saucal` sits on — never by merging the master-based branch itself, which
+would bring all of post-release master with it:
+
+    git checkout -b saucal/<change> v0.19.1
+    git cherry-pick <the commit from the master-based branch>
+    git checkout release/saucal
+    git merge --no-ff saucal/<change>
+
+The merge commit is where changes meet each other: two of them touching the same
+place conflict there, in the open, instead of silently in a cherry-pick. Both
+hooks at the top of `cmd/restic/main.go` were reconciled exactly that way.
 
 Nothing is ever merged into `master`: keeping it identical to upstream is what
 makes both the upstream diffs and the version merges clean.
@@ -62,8 +72,8 @@ still visible where it matters:
        git push -f origin HEAD:saucal-release-test/try
 4. Cut the release: tag and push.
 
-       git tag -a v0.18.0-saucal.2 -m "what changed"
-       git push origin v0.18.0-saucal.2
+       git tag -a v0.19.1-saucal.3 -m "what changed"
+       git push origin v0.19.1-saucal.3
 
    The workflow builds the assets, checks them, and publishes the release. The
    workflow file must already be committed when the tag is made — a tag push runs
