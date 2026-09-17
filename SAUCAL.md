@@ -17,9 +17,15 @@ cannot even be killed.
     repro/…           reproductions and evidence; nothing there ships
 
 Work meant for upstream starts on a branch off `master`, so its diff is against
-what upstream has. It reaches the fleet by being merged into `release/saucal`.
+what upstream has. It reaches the fleet by being **cherry-picked** onto
+`release/saucal` — not merged: a master-based branch carries all of master with
+it, and `release/saucal` sits on a release tag, which is behind master. Only
+upstream's release tags are ever merged in, as below.
+
 Nothing is ever merged into `master`: keeping it identical to upstream is what
-makes both the upstream diffs and the version merges below clean.
+makes both the upstream diffs and the version merges clean.
+
+`saucal/IDEAS.md` lists what else is worth building here, and why.
 
 Note that a change may need two shapes, because upstream moves files between
 releases. The preallocation fix sits in `internal/fs/` on `release/saucal` (where
