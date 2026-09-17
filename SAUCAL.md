@@ -75,8 +75,19 @@ still visible where it matters:
    to compare with the upstream branch.
 2. Let CI run — pull request #6 in this fork exists only to give this branch the
    full test matrix, because the workflow runs on pull requests and ignores
-   pushes to anything but `master`. Never merge it. If it is ever closed again,
-   this branch silently stops being tested; open a replacement.
+   pushes to anything but `master`. Never merge it.
+
+   **Its base must be `saucal-ci-base`, a branch parked at `v0.19.1`, not
+   `master`.** Against `master` the pull request conflicts, and GitHub cannot
+   build a merge commit for a conflicting pull request, so the `pull_request`
+   workflows never run at all — the checks list shows only `size-label` and the
+   branch looks fine while being entirely untested. That is how this branch came
+   to carry three patches without a matrix ever having run on it. Changing the
+   base does not re-trigger the run; close and reopen the pull request.
+
+   Note the release workflow's own `Test` step is not a substitute: it runs
+   `./internal/fs/ ./internal/restorer/ ./internal/backend/local/` only, so a
+   change to the archiver or the repository is not covered by it at all.
 3. Try the release pipeline without publishing: push the commit to a branch under
    `saucal-release-test/`. The release workflow builds, tests and smoke-tests it,
    then stops, because only a tag publishes anything.
@@ -104,8 +115,11 @@ Upstream's test matrix cannot run on a branch off `master`: every job dies in
 `Get programs`, where `dl.minio.io` answers `410 Gone`. To get a real matrix on
 such a branch, cherry-pick the minio fix from `upstream/ci-install-minio-from-source`
 onto a throwaway branch with it and open a pull request in this fork. Drop
-`test_cloud_backends` while you are there — a fork PR satisfies restic's condition
-for those tests and they then fail for want of secrets.
+`test_cloud_backends` while you are there — a same-repo pull request satisfies
+restic's condition for those tests and they then fail for want of secrets.
+
+`ci-check/wide-directory-memory` (pull request #5) is the working example: the
+branch under review plus those two CI commits, never merged.
 
 This branch does not need that: the fix is already in its own `tests.yml`.
 
