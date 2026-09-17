@@ -86,6 +86,18 @@ still visible where it matters:
    Prefer setting it on one repo and running a staging recreation before going
    organisation-wide.
 
+## A published release is immutable
+
+Once a tag is pushed and the release exists, it is never re-cut. Deleting and
+republishing a release takes its download URLs offline for as long as the rebuild
+runs, and anything fetching in that window gets a 404 — hosts installing restic,
+and anyone who was told that base URL. It has already happened once, on
+2026-09-17, while tidying this branch's history.
+
+Fix forward instead: a new tag, `-saucal.N+1`, and point
+`SAUCAL_RESTIC_RELEASE_BASE` at it. History and commit messages are only worth
+rewriting before the first tag is pushed.
+
 ## Building locally
 
     ./saucal/build-release.sh          # writes dist/
