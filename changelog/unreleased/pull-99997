@@ -1,0 +1,18 @@
+Enhancement: Reduce memory usage when backing up very wide directories
+
+Backing up a directory with a very large number of entries used about a kilobyte
+of memory per entry, because every finished entry was held until the whole
+directory had been walked and only then folded into the directory's tree. A
+directory of a million files therefore needed roughly a gigabyte on top of the
+tree itself, which was enough for a host with a memory cap to kill the backup.
+
+Finished entries are now folded into the tree as the walk goes, so only a bounded
+number are held at once; each entry's name is released once it has been used; and
+the buffer holding the tree is sized from the directory's entry count instead of
+being repeatedly grown and copied.
+
+Backing up a single directory of 600000 entries under a 600 MiB memory cap
+previously failed and now succeeds, and the same backup without a cap uses
+39% less memory. The tree written is unchanged.
+
+https://github.com/restic/restic/pull/99997
