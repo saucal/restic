@@ -17,6 +17,7 @@ import (
 	"github.com/restic/restic/internal/debug"
 	"github.com/restic/restic/internal/errors"
 	"github.com/restic/restic/internal/feature"
+	"github.com/restic/restic/internal/fs"
 	"github.com/restic/restic/internal/repository"
 	"github.com/restic/restic/internal/restic"
 )
@@ -150,6 +151,13 @@ func printExitError(code int, message string) {
 }
 
 func main() {
+	// A probe process exists only to find out whether the filesystem answers
+	// preallocation, and must not go on to do anything else. This has to come before
+	// the arguments are parsed, as the probe is asked for with one of them.
+	if fs.RunProbe() {
+		Exit(0)
+	}
+
 	tweakGoGC()
 	// install custom global logger into a buffer, if an error occurs
 	// we can show the logs
