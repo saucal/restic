@@ -73,7 +73,10 @@ still visible where it matters:
 
 1. Commit it on this branch. Keep the fix itself as one commit, so it stays easy
    to compare with the upstream branch.
-2. Let CI run — pull request #1 in this fork covers this branch.
+2. Let CI run — pull request #6 in this fork exists only to give this branch the
+   full test matrix, because the workflow runs on pull requests and ignores
+   pushes to anything but `master`. Never merge it. If it is ever closed again,
+   this branch silently stops being tested; open a replacement.
 3. Try the release pipeline without publishing: push the commit to a branch under
    `saucal-release-test/`. The release workflow builds, tests and smoke-tests it,
    then stops, because only a tag publishes anything.
