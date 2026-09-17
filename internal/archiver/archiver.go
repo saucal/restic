@@ -146,6 +146,14 @@ const (
 // read concurrently, so that a slow entry does not stall the ones behind it.
 const maxPendingNodes = 10000
 
+// spillTreeEntries is the number of entries from which a directory's tree is
+// written to a temp file and streamed into the repository rather than held in
+// memory. A tree runs to a few hundred bytes per entry, and holding it is then
+// the largest single cost of backing up a very wide directory -- it is held
+// while the directory is walked, and compressed and encrypted from that same
+// copy afterwards.
+const spillTreeEntries = 50000
+
 // Options is used to configure the archiver.
 type Options struct {
 	// ReadConcurrency sets how many files are read in concurrently. If
