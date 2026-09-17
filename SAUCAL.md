@@ -11,9 +11,10 @@ changes:
 - **Memory diagnostics.** `RESTIC_DIAG_LOG` writes a memory sample every ten
   seconds, so a backup the host kills leaves an account of what it cost behind.
   A kill leaves no error message, so without this there is nothing to read.
-- **Wide directories.** A directory with very many entries no longer costs about
-  a kilobyte of memory per entry. See below for what that buys and where the
-  remaining limit is.
+- **Wide directories.** A directory with very many entries no longer costs
+  memory in proportion to its width: finished entries are folded into the tree as
+  the walk goes, the tree itself is written through a temp file rather than held,
+  and verifying a large blob no longer holds a second copy of it. See below.
 
 ## How the branches fit together
 
@@ -164,24 +165,49 @@ saver's queue being unbuffered: the walk is already paced by the file readers, s
 consuming finished entries earlier costs no concurrency. Give the file saver a
 buffered queue and that stops being true.
 
-## What a wide directory still costs
+## What a wide directory costs
 
-One directory of W entries needs roughly 0.8 KB per entry, down from 1.3 KB.
-Measured on a flat directory of zero-byte files with names as long as
-WordPress's, GOMAXPROCS=2 and GOGC=20, peak RSS:
+One directory of W entries used to need about 1.3 KB per entry. Measured on a
+flat directory of zero-byte files with names as long as WordPress's,
+GOMAXPROCS=2 and GOGC=20, peak RSS:
 
 | entries | v0.19.1 | this build |
 | ------- | ------- | ---------- |
 | 400000  | 537 MB  | 359 MB     |
-| 1000000 | 1248 MB | 759 MB     |
+| 1000000 | 1248 MB | 208 MB     |
+| 1200000 | (dies)  | 241 MB     |
 
-Under a hard 600 MB cap, 600000 entries in one directory failed before and
-succeeds now. Beyond that, `GOMEMLIMIT` matters: the transient buffers that
-compress and verify the tree are garbage, and without a limit Go grows the heap
-instead of collecting them. With `GOMEMLIMIT=450MiB`, 800000 entries succeed too.
-It cannot rescue the old build, whose cost was live rather than garbage.
+A million entries in one directory failed under a 600 MB cap on v0.19.1 and now
+succeeds under a **250 MiB** one. Three changes got there, in order of what they
+saved:
 
-A million entries in one directory fails regardless, and that part is structural.
-A directory's tree is a single blob, so its ~300 MB of JSON must exist whole to be
-hashed, compressed and sealed — restic's blob encryption has no streaming form.
-No amount of tuning avoids that; the directory has to get smaller.
+1. Finished entries are folded into the tree during the walk instead of being
+   held until the end (`maxPendingNodes`). This was the bulk of the old cost --
+   a node, two path strings and a channel per entry.
+2. The tree of a directory of `spillTreeEntries` or more is written to a temp
+   file and streamed into the repository, hashed and compressed as it is read
+   back (`saveBlobFromReader`). The tree of a million entries is ~300 MB and was
+   previously held in memory for the whole walk and then compressed from that
+   same copy.
+3. Verification of a blob over 16 MiB hashes it as it decompresses instead of
+   holding a second uncompressed copy.
+
+What is left scales only with the number of entries, not the size of the tree:
+reading the directory's names, which have to be held to be sorted. That is 134 MB
+of the 241 MB measured at 1.2M entries. Real files with content cost no more
+memory than empty ones now, because the blob IDs land in the spilled tree rather
+than in memory.
+
+**The temp file needs somewhere to live.** It goes where `TMPDIR` points, or
+`/tmp`, and for a directory of a million entries it is a few hundred megabytes.
+restic already writes pack files there, but only ~16 MB at a time, so a host with
+a tiny or memory-backed `/tmp` is a new consideration: if `/tmp` is a tmpfs the
+tree is still in RAM, and the point is lost. Check `df /tmp` on a memory-capped
+host and set `TMPDIR` to real disk if needed. If the file cannot be created at
+all, restic falls back to building the tree in memory, as before.
+
+**`GOMEMLIMIT` is still worth setting** (`GOMEMLIMIT=450MiB` beside the existing
+`GOGC=20`): the buffers used to compress and seal a blob are garbage, and without
+a limit Go grows the heap rather than collecting them. It is no longer needed for
+a directory of a million entries, but it costs nothing and covers the next
+surprise.
