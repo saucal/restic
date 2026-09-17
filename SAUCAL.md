@@ -86,6 +86,17 @@ still visible where it matters:
    Prefer setting it on one repo and running a staging recreation before going
    organisation-wide.
 
+## Getting CI on a master-based branch
+
+Upstream's test matrix cannot run on a branch off `master`: every job dies in
+`Get programs`, where `dl.minio.io` answers `410 Gone`. To get a real matrix on
+such a branch, cherry-pick the minio fix from `upstream/ci-install-minio-from-source`
+onto a throwaway branch with it and open a pull request in this fork. Drop
+`test_cloud_backends` while you are there — a fork PR satisfies restic's condition
+for those tests and they then fail for want of secrets.
+
+This branch does not need that: the fix is already in its own `tests.yml`.
+
 ## A published release is immutable
 
 Once a tag is pushed and the release exists, it is never re-cut. Deleting and
