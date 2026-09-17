@@ -344,6 +344,11 @@ func (arch *Archiver) saveDir(ctx context.Context, snPath string, dir string, me
 	}
 	nodes := make([]futureNode, 0, capacity)
 	var builder *treeBuilder
+	// Until the tree saver takes the builder it is ours, and a wide directory's
+	// builder holds an open temp file.
+	defer func() {
+		builder.release()
+	}()
 
 	finder := data.NewTreeFinder(previous)
 	defer finder.Close()
@@ -407,6 +412,8 @@ func (arch *Archiver) saveDir(ctx context.Context, snPath string, dir string, me
 	}
 
 	fn := arch.treeSaver.Save(ctx, snPath, dir, treeNode, builder, nodes, complete)
+	// the tree saver owns it now, including closing its temp file
+	builder = nil
 
 	return fn, nil
 }
