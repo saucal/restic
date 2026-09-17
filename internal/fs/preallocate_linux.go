@@ -7,7 +7,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func PreallocateFile(wr *os.File, size int64) error {
+// preallocateFile is the platform's own call (linux: fallocate);
+// PreallocateFile in preallocate.go only makes it once the filesystem has answered.
+func preallocateFile(wr *os.File, size int64) error {
 	if size <= 0 {
 		return nil
 	}
