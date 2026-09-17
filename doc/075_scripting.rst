@@ -43,6 +43,8 @@ environment variables, which are listed below.
     RESTIC_READ_CONCURRENCY             Concurrency for file reads
     RESTIC_IGNORE_CTIME                 Ignore ctime changes when comparing files (replaces --ignore-ctime)
     RESTIC_IGNORE_INODE                 Ignore inode changes when comparing files (replaces --ignore-inode)
+    RESTIC_DIAG_LOG                     Write memory diagnostics for this run to this file
+    RESTIC_DIAG_INTERVAL                How often to record them (default 10s)
 
     RESTIC_FROM_REPOSITORY              Source repository for copy (replaces --from-repo)
     RESTIC_FROM_REPOSITORY_FILE         File containing source repository for copy (replaces --from-repository-file)

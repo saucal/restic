@@ -16,6 +16,7 @@ import (
 
 	"github.com/restic/restic/internal/backend/all"
 	"github.com/restic/restic/internal/debug"
+	"github.com/restic/restic/internal/diag"
 	"github.com/restic/restic/internal/errors"
 	"github.com/restic/restic/internal/feature"
 	"github.com/restic/restic/internal/global"
@@ -159,6 +160,17 @@ func printExitError(globalOptions global.Options, code int, message string) {
 }
 
 func main() {
+	// Records what restic costs in memory, when asked to. A backup that the kernel
+	// kills leaves no error behind, so the account has to be written as it goes.
+	stopDiagnostics := diag.Start()
+	defer stopDiagnostics()
+	defer func() {
+		if r := recover(); r != nil {
+			diag.Record(fmt.Sprintf("panic: %v", r))
+			panic(r)
+		}
+	}()
+
 	tweakGoGC()
 	// install custom global logger into a buffer, if an error occurs
 	// we can show the logs
