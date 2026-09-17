@@ -3,6 +3,7 @@ package archiver
 import (
 	"context"
 	"fmt"
+	"io"
 	"runtime"
 	"sync"
 	"testing"
@@ -22,6 +23,27 @@ type mockSaver struct {
 func (m *mockSaver) SaveBlobAsync(_ context.Context, _ restic.BlobType, buf []byte, id restic.ID, storeDuplicate bool, cb func(newID restic.ID, known bool, sizeInRepo int, err error)) {
 	// Fake async operation
 	go func() {
+		m.mutex.Lock()
+		m.saved[string(buf)]++
+		m.mutex.Unlock()
+
+		cb(restic.Hash(buf), false, len(buf), nil)
+	}()
+}
+
+func (m *mockSaver) SaveBlobFromReaderAsync(_ context.Context, _ restic.BlobType, rd io.Reader, size int64, cb func(newID restic.ID, known bool, sizeInRepo int, err error)) {
+	// Fake async operation
+	go func() {
+		buf, err := io.ReadAll(rd)
+		if err != nil {
+			cb(restic.ID{}, false, 0, err)
+			return
+		}
+		if int64(len(buf)) != size {
+			cb(restic.ID{}, false, 0, fmt.Errorf("got %d bytes, expected %d", len(buf), size))
+			return
+		}
+
 		m.mutex.Lock()
 		m.saved[string(buf)]++
 		m.mutex.Unlock()

@@ -1,0 +1,19 @@
+Enhancement: Back up a very wide directory without holding its tree in memory
+
+A directory's tree is a single blob listing all of its entries, a few hundred
+bytes each. restic built that blob in memory, held it while the directory was
+walked, and then compressed and encrypted it from that same copy, so backing up a
+directory of a million entries needed several hundred megabytes for the tree
+alone. On a host that caps the memory a process may use -- some managed WordPress
+hosts kill a backup at well under a gigabyte -- that made such a directory
+impossible to back up at all.
+
+For a directory of 50000 entries or more the tree is now written to a temporary
+file as the directory is walked, then hashed and compressed as it is read back,
+so it is never held in one piece. If a temporary file cannot be created, restic
+falls back to building the tree in memory as before.
+
+Backing up one directory of a million entries now peaks at 208 MB instead of
+1248 MB, and succeeds under a 250 MiB memory cap. The tree written is unchanged.
+
+https://github.com/restic/restic/pull/99995
