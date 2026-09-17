@@ -1,11 +1,15 @@
 package archiver
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"io"
+	"os"
 
 	"github.com/restic/restic/internal/data"
 	"github.com/restic/restic/internal/debug"
+	"github.com/restic/restic/internal/fs"
 	"github.com/restic/restic/internal/restic"
 	"golang.org/x/sync/errgroup"
 )
@@ -83,12 +87,66 @@ type treeBuilder struct {
 	builder  *data.TreeJSONBuilder
 	lastNode *data.Node
 	errFn    ErrorFunc
+
+	// spill holds the tree of a directory too wide to keep its tree in memory.
+	// The file is already unlinked, so closing it is all the cleanup there is.
+	spill  *os.File
+	spillW *bufio.Writer
 }
 
 func newTreeBuilder(errFn ErrorFunc, expectedEntries int) *treeBuilder {
+	// The tree of a directory this wide runs to tens of megabytes and would
+	// otherwise be held whole, then compressed and encrypted from that copy.
+	// Write it to a temp file instead and stream it into the repository, which
+	// costs a file the operating system has already been told to delete.
+	if expectedEntries >= spillTreeEntries {
+		if f, err := fs.TempFile("", "restic-temp-tree-"); err == nil {
+			w := bufio.NewWriterSize(f, 1<<20)
+			return &treeBuilder{
+				builder: data.NewTreeJSONBuilderTo(w),
+				errFn:   errFn,
+				spill:   f,
+				spillW:  w,
+			}
+		}
+		// a temp file is a nicety, not a requirement -- fall through
+	}
+
 	return &treeBuilder{
 		builder: data.NewTreeJSONBuilderForEntries(expectedEntries),
 		errFn:   errFn,
+	}
+}
+
+// finish completes the tree. It returns either the tree's bytes or, for a tree
+// that was spilled to disk, a reader over it and its size; the caller must call
+// release when done either way.
+func (tb *treeBuilder) finish() (buf []byte, rd io.Reader, size int64, err error) {
+	buf, err = tb.builder.Finalize()
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if tb.spill == nil {
+		return buf, nil, 0, nil
+	}
+
+	if err := tb.spillW.Flush(); err != nil {
+		return nil, nil, 0, err
+	}
+	size, err = tb.spill.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if _, err := tb.spill.Seek(0, io.SeekStart); err != nil {
+		return nil, nil, 0, err
+	}
+	return nil, tb.spill, size, nil
+}
+
+func (tb *treeBuilder) release() {
+	if tb.spill != nil {
+		_ = tb.spill.Close()
+		tb.spill = nil
 	}
 }
 
@@ -154,10 +212,11 @@ func (s *treeSaver) save(ctx context.Context, job *saveTreeJob) (*data.Node, Ite
 		}
 	}
 
-	buf, err := tb.builder.Finalize()
+	buf, treeRd, treeSize, err := tb.finish()
 	if err != nil {
 		return nil, stats, err
 	}
+	defer tb.release()
 
 	var (
 		known      bool
@@ -166,15 +225,25 @@ func (s *treeSaver) save(ctx context.Context, job *saveTreeJob) (*data.Node, Ite
 		id         restic.ID
 	)
 
+	treeLength := len(buf)
+	if treeRd != nil {
+		treeLength = int(treeSize)
+	}
+
 	ch := make(chan struct{}, 1)
-	s.uploader.SaveBlobAsync(ctx, restic.TreeBlob, buf, restic.ID{}, false, func(newID restic.ID, cbKnown bool, cbSizeInRepo int, cbErr error) {
+	cb := func(newID restic.ID, cbKnown bool, cbSizeInRepo int, cbErr error) {
 		known = cbKnown
-		length = len(buf)
+		length = treeLength
 		sizeInRepo = cbSizeInRepo
 		id = newID
 		err = cbErr
 		ch <- struct{}{}
-	})
+	}
+	if treeRd != nil {
+		s.uploader.SaveBlobFromReaderAsync(ctx, restic.TreeBlob, treeRd, treeSize, cb)
+	} else {
+		s.uploader.SaveBlobAsync(ctx, restic.TreeBlob, buf, restic.ID{}, false, cb)
+	}
 
 	select {
 	case <-ch:
