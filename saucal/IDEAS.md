@@ -51,6 +51,35 @@ paying that twice.
 **Shape:** have `restore` emit path + hash as it writes, `--json` friendly, so the
 caller can check against its own copy without re-reading.
 
+## Itemized changes for restore, like rsync's
+
+**Why:** restic says *that* an item changed, never *what* about it changed. The
+restorer classifies each one as `file restored`, `file updated`, `file unchanged`,
+`deleted` (`internal/ui/restore/progress.go`), and `--json` flattens that further
+to restored/updated/unchanged/deleted. So a staging recreation can report that it
+touched 4,000 files without being able to say whether that was content, mtime,
+permissions or ownership — which is exactly the question asked when a restore
+changes more than expected, and the question `--overwrite if-changed` silently
+answers on its own.
+
+rsync answers it in eleven positions, `YXcstpoguax` (`log.c`): update type and
+file type, then one column each for checksum, size, time, permissions, owner,
+group, access time, ACL and xattr — `.` when that attribute matches, its letter
+when it differs, `+` for a new item. Reading `>f.st......` tells you the content
+and mtime differ and nothing else does.
+
+**Shape:** the restorer already compares size and mtime to decide `if-changed`,
+and knows a file's blob hashes, so most columns are available where the decision
+is made rather than needing new work. Emit them per item under an explicit flag,
+and extend the JSON item messages with the same fields so tooling can aggregate
+without parsing text. Pairs naturally with `--dry-run`: "here is what this
+restore would change, and why" is a far better pre-flight than a count.
+
+**Careful about:** restic does not stat every attribute rsync does, and some
+(ACLs, xattrs) it restores without comparing first. Columns it cannot honestly
+fill should read as unknown rather than as "matches" — an itemization that lies
+by omission is worse than none.
+
 ## A memory ceiling for backup
 
 **Why:** elka cannot be backed up on Pressable — restic is OOM-killed. The
