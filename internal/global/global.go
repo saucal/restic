@@ -35,7 +35,13 @@ import (
 // to a missing backend storage location or config file
 var ErrNoRepository = errors.New("repository does not exist")
 
-const Version = "0.19.1"
+// Version is upstream's, with a suffix naming this fork's build. Upstream made it a
+// constant, so build.go's -X injection no longer reaches it and `restic version` can
+// otherwise not tell our build from a stock one. The suffix also lands in the
+// ProgramVersion of every snapshot we write, which says which build made it.
+// It must not reach the VERSION file: the release asset names come from there, and
+// the maintenance action derives the same names from its own RESTIC_VERSION.
+const Version = "0.19.1-saucal"
 
 // TimeFormat is the format used for all timestamps printed by restic.
 const TimeFormat = "2006-01-02 15:04:05"
