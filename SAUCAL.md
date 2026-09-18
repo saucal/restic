@@ -218,10 +218,19 @@ than in memory.
 **The temp file needs somewhere to live.** It goes where `TMPDIR` points, or
 `/tmp`, and for a directory of a million entries it is a few hundred megabytes.
 restic already writes pack files there, but only ~16 MB at a time, so a host with
-a tiny or memory-backed `/tmp` is a new consideration: if `/tmp` is a tmpfs the
-tree is still in RAM, and the point is lost. Check `df /tmp` on a memory-capped
-host and set `TMPDIR` to real disk if needed. If the file cannot be created at
-all, restic falls back to building the tree in memory, as before.
+a tiny or memory-backed `/tmp` is a consideration: if `/tmp` is a tmpfs the tree is
+still in RAM and the point is lost. Check `df /tmp` on a memory-capped host and
+set `TMPDIR` to real disk if needed. If the file cannot be created at all, restic
+falls back to building the tree in memory, as before.
+
+On Pressable this is fine, confirmed on the real site 2026-09-18: the maintenance
+action unpacks the binary into `/tmp/issh.XXX/` and `TMPDIR` is the same
+filesystem, so the spill has room and nothing needs setting.
+
+**A killed backup leaves its lock behind**, and restic treats a lock made by
+another host as stale only after 30 minutes, so retrying inside that window is
+refused with `restic check failed`. Testing a memory limit means producing kills,
+so expect this; `restic unlock --remove-all` clears it.
 
 **`GOMEMLIMIT` is still worth setting** (`GOMEMLIMIT=450MiB` beside the existing
 `GOGC=20`): the buffers used to compress and seal a blob are garbage, and without
