@@ -16,8 +16,10 @@ import (
 
 	"github.com/restic/restic/internal/backend/all"
 	"github.com/restic/restic/internal/debug"
+	"github.com/restic/restic/internal/diag"
 	"github.com/restic/restic/internal/errors"
 	"github.com/restic/restic/internal/feature"
+	"github.com/restic/restic/internal/fs"
 	"github.com/restic/restic/internal/global"
 	"github.com/restic/restic/internal/repository"
 	"github.com/restic/restic/internal/restic"
@@ -160,6 +162,25 @@ func printExitError(globalOptions global.Options, code int, message string) {
 }
 
 func main() {
+	// A probe process exists only to find out whether the filesystem answers
+	// preallocation, and must not go on to do anything else. This has to come before
+	// the arguments are parsed, as the probe is asked for with one of them — and
+	// before the diagnostics below, which such a process has no business writing to.
+	if fs.RunProbe() {
+		Exit(0)
+	}
+
+	// Records what restic costs in memory, when asked to. A backup that the kernel
+	// kills leaves no error behind, so the account has to be written as it goes.
+	stopDiagnostics := diag.Start()
+	defer stopDiagnostics()
+	defer func() {
+		if r := recover(); r != nil {
+			diag.Record(fmt.Sprintf("panic: %v", r))
+			panic(r)
+		}
+	}()
+
 	tweakGoGC()
 	// install custom global logger into a buffer, if an error occurs
 	// we can show the logs

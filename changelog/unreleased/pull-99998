@@ -1,0 +1,11 @@
+Enhancement: Record memory usage during a run
+
+A backup that the kernel's OOM killer stops leaves no error behind to explain
+itself, because `SIGKILL` cannot be caught. Setting `RESTIC_DIAG_LOG` to a file
+now makes restic record, as it runs, how much memory it is using — its own heap
+figures alongside what the cgroup reports, which is what the kernel decides on.
+Each line is flushed as it is written, so the last one says what restic was using
+when it was killed. `RESTIC_DIAG_INTERVAL` sets how often to sample, 10 seconds
+by default.
+
+https://github.com/restic/restic/pull/99998

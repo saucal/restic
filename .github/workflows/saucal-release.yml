@@ -1,0 +1,79 @@
+# Publishes the build the maintenance action installs from SAUCAL_RESTIC_RELEASE_BASE.
+#
+# Push a tag like v0.18.0-saucal.2 on this branch and the release appears with the two
+# assets the action expects. The workflow file has to be committed BEFORE the tag is
+# made: a tag push runs the workflow as it exists in the tagged commit.
+name: saucal release
+
+on:
+  push:
+    tags:
+      - "v*-saucal.*"
+    # Pushing a branch under saucal-release-test/ builds and checks without
+    # publishing, to try the pipeline out before tagging. (workflow_dispatch would
+    # only work if this file also sat on the default branch, which tracks upstream
+    # and should stay that way.)
+    branches:
+      - "saucal-release-test/**"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+        with:
+          # build.go names the build from `git describe`, which needs the history.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x  # restic 0.19.1 requires Go 1.25
+
+      - name: Check the fix is present
+        # Cheap guard against publishing a build from the wrong branch: without this,
+        # the binary would hang on the filesystems this fork exists for.
+        run: |
+          test -f internal/fs/preallocate.go
+          grep -q "preallocate-probe" internal/fs/preallocate.go
+
+      - name: Test
+        run: go test ./internal/fs/ ./internal/restorer/ ./internal/backend/local/
+
+      - name: Build
+        run: ./saucal/build-release.sh dist
+
+      - name: Smoke-test the binary
+        run: |
+          ./dist/restic_*_linux_amd64 version
+          # The probe answers only when cmd/restic calls RunProbe before parsing
+          # arguments. If this line stops printing the token, preallocation silently
+          # turns itself off everywhere.
+          ./dist/restic_*_linux_amd64 --__preallocate-probe "$(mktemp -d)"
+          # The checksum check the hosts run, verbatim.
+          cd dist && grep " restic_.*_linux_amd64.bz2$" SHA256SUMS | sha256sum -c -
+
+      - name: Publish the release
+        # Only a tag names a release; a manual run stops after the checks above.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "restic $(cat VERSION) with saucal's preallocation fix, built from \`${GITHUB_SHA}\`.
+
+          Point the fleet at it:
+
+              SAUCAL_RESTIC_RELEASE_BASE=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}
+
+          The asset names carry restic's own version, not this tag, because the action
+          derives them from RESTIC_VERSION and only the base URL is ours to set." \
+            dist/restic_*_linux_amd64.bz2 \
+            dist/SHA256SUMS
