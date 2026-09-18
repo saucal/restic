@@ -588,7 +588,7 @@ func wideTreeBlob(entries int) []byte {
 	return buf.Bytes()
 }
 
-func saveTreeFromReader(t testing.TB, uploader restic.BlobSaverWithAsync, ctx context.Context, blob []byte) (restic.ID, bool) {
+func saveTreeFromReader(ctx context.Context, t testing.TB, uploader restic.BlobSaverWithAsync, blob []byte) (restic.ID, bool) {
 	rd := bytes.NewReader(blob)
 	var (
 		id    restic.ID
@@ -615,11 +615,11 @@ func TestSaveBlobFromReaderDedup(t *testing.T) {
 	want := restic.Hash(blob)
 
 	rtest.OK(t, repo.WithBlobUploader(context.Background(), func(ctx context.Context, uploader restic.BlobSaverWithAsync) error {
-		id, known := saveTreeFromReader(t, uploader, ctx, blob)
+		id, known := saveTreeFromReader(ctx, t, uploader, blob)
 		rtest.Equals(t, want, id)
 		rtest.Assert(t, !known, "a tree saved for the first time was reported as known")
 
-		id, known = saveTreeFromReader(t, uploader, ctx, blob)
+		id, known = saveTreeFromReader(ctx, t, uploader, blob)
 		rtest.Equals(t, want, id)
 		rtest.Assert(t, known, "a tree the repository already holds was not recognised")
 		return nil
@@ -635,12 +635,12 @@ func BenchmarkSaveBlobFromReaderKnown(b *testing.B) {
 	b.SetBytes(int64(len(blob)))
 
 	rtest.OK(b, repo.WithBlobUploader(context.Background(), func(ctx context.Context, uploader restic.BlobSaverWithAsync) error {
-		_, known := saveTreeFromReader(b, uploader, ctx, blob)
+		_, known := saveTreeFromReader(ctx, b, uploader, blob)
 		rtest.Assert(b, !known, "blob should be new on the first save")
 
 		b.ResetTimer()
 		for range b.N {
-			_, known := saveTreeFromReader(b, uploader, ctx, blob)
+			_, known := saveTreeFromReader(ctx, b, uploader, blob)
 			if !known {
 				b.Fatal("blob should be known")
 			}
@@ -663,7 +663,7 @@ func BenchmarkSaveBlobFromReaderNew(b *testing.B) {
 		unique := fmt.Appendf(blob[:len(blob):len(blob)], "%d", i)
 		b.StartTimer()
 		rtest.OK(b, repo.WithBlobUploader(context.Background(), func(ctx context.Context, uploader restic.BlobSaverWithAsync) error {
-			_, known := saveTreeFromReader(b, uploader, ctx, unique)
+			_, known := saveTreeFromReader(ctx, b, uploader, unique)
 			rtest.Assert(b, !known, "blob should be new")
 			return nil
 		}))
