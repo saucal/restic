@@ -123,7 +123,7 @@ func newTreeBuilder(errFn ErrorFunc, expectedEntries int) *treeBuilder {
 // finish completes the tree. It returns either the tree's bytes or, for a tree
 // that was spilled to disk, a reader over it and its size; the caller must call
 // release when done either way.
-func (tb *treeBuilder) finish() (buf []byte, rd io.Reader, size int64, err error) {
+func (tb *treeBuilder) finish() (buf []byte, rd io.ReadSeeker, size int64, err error) {
 	buf, err = tb.builder.Finalize()
 	if err != nil {
 		return nil, nil, 0, err
@@ -209,9 +209,16 @@ func (s *treeSaver) save(ctx context.Context, job *saveTreeJob) (*data.Node, Ite
 		tb = newTreeBuilder(s.errFn, len(nodes))
 	}
 	job.builder = nil
-	// Every path out of here has to close the temp file, including the error
-	// returns below and a cancellation that abandons the upload.
-	defer tb.release()
+	// A cancelled backup returns from here while the repository is still reading
+	// the temp file, so it is released once the repository is done with it --
+	// that is, in the callback, which is always called. Until it has been handed
+	// over the file is ours, and every error return below has to close it.
+	handedOver := false
+	defer func() {
+		if !handedOver {
+			tb.release()
+		}
+	}()
 
 	for i, fn := range nodes {
 		// fn is a copy, so clear the original value explicitly
@@ -245,8 +252,11 @@ func (s *treeSaver) save(ctx context.Context, job *saveTreeJob) (*data.Node, Ite
 		sizeInRepo = cbSizeInRepo
 		id = newID
 		err = cbErr
+		// the repository has finished with the temp file
+		tb.release()
 		ch <- struct{}{}
 	}
+	handedOver = true
 	if treeRd != nil {
 		s.uploader.SaveBlobFromReaderAsync(ctx, restic.TreeBlob, treeRd, treeSize, cb)
 	} else {
