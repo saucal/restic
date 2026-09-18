@@ -80,22 +80,69 @@ restore would change, and why" is a far better pre-flight than a count.
 fill should read as unknown rather than as "matches" — an itemization that lies
 by omission is worse than none.
 
-## A memory ceiling for backup
+## A memory ceiling for backup — mostly answered, one piece left
 
-**Why:** elka cannot be backed up on Pressable — restic is OOM-killed. The
-diagnostics added in `RESTIC_DIAG_LOG` say *what* it was using when it died;
-they do not stop it happening.
+**What happened:** the diagnostics did their job. They said the memory went to
+directory *width*, not index size, and `v0.19.1-saucal.3` fixed that: one flat
+directory of a million entries went from 1248 MB to 208 MB, and elka backs up on
+Pressable at a measured peak of 272 MB heap / 325 MB total against the 540-683 MB
+that used to kill it. So a `--memory-limit` that throttles concurrency is no longer
+the interesting idea it was.
 
-**Shape:** honour `GOMEMLIMIT`, or a `--memory-limit` that throttles concurrency
-and index residency to fit. Do this only once the diagnostics have said where the
-memory actually goes — the answer may be index size, in which case the fix is a
-different one.
+**What is left:** `GOMEMLIMIT` is worth setting on the fleet and still is not set.
+The buffers that compress and seal a blob are garbage, and without a limit Go grows
+the heap rather than collecting them; it bought 600k -> 800k entries per directory
+in the Docker measurements. It costs one environment variable beside the existing
+`GOGC=20` and covers the next surprise rather than this one.
+
+## Reading a very wide directory's tree
+
+**Why:** the write path no longer holds a whole tree in memory, but the read path
+still does. A directory of a million entries has a ~300 MB tree blob, and
+`LoadBlob` returns it whole, so `restore`, `check`, `ls` and `find` on such a
+snapshot each need that much — the asymmetry is now the larger half of the problem
+for elka, whose backup succeeds in 325 MB but whose restore would not.
+
+**Shape:** a streaming blob load, feeding `data.NewTreeNodeIterator` from a reader
+rather than from a `[]byte`. The iterator already exists and already streams; it is
+the layer below it that materialises. Decrypting needs the whole ciphertext, but
+decompression and JSON parsing can both be incremental, so the ceiling would fall
+to roughly the compressed size.
+
+**Worth knowing first:** nobody has tried restoring elka. That measurement should
+come before the work — `restore --dry-run` will not do, it does not load data, but
+`ls latest --recursive` on that snapshot would show the shape of it.
+
+## A more compact directory listing
+
+**Why:** after the wide-directory work, the one term that still scales with
+directory width is the entry names: 134 MB of the 241 MB measured at 1.2M entries.
+They are held because the tree has to be written in sorted order, and each is its
+own Go string with its own allocation and size-class rounding.
+
+**Shape:** rsync's approach — one slab of bytes plus offsets, sorted as offsets,
+which is roughly 89 bytes per entry against the current ~112. About a 20% cut on
+that term, so ~25 MB at a million entries.
+
+**Why it is not done:** the measured headroom made it unnecessary, and it trades
+clear code for a modest saving. Worth doing only if a site turns up that needs it —
+the fleet's peak figures will say, now that every backup reports one.
 
 ## Deferred decisions, not features
 
-* The preallocation fix has not been offered upstream. It needs an issue opened
-  first (restic asks for prior discussion), which also replaces the placeholder
-  number in its changelog entry.
+* Nothing here has been offered upstream yet. `upstream/bound-wide-directory-memory`
+  now carries six commits (bound the pending nodes, verify a large blob without a
+  second copy, spill the tree through a temp file, close that file on every path,
+  do not close it while the repository reads it, hash before compressing) and
+  `upstream/preallocation-guard` one. All of them need issues opened first — restic
+  asks for prior discussion — which also replaces the placeholder numbers in their
+  changelog entries (`pull-99994` through `pull-99999`). The two small fixup commits
+  in the series are worth squashing into the commits they fix at submission time.
+* The wide-directory series is worth splitting across two pull requests rather than
+  one: bounding the pending nodes is a self-contained memory fix that needs no new
+  interface, while spilling the tree adds `SaveBlobFromReaderAsync`. The first would
+  likely go in on its own merits; the second invites a design conversation about a
+  streaming blob API, which the read-path idea above would also want.
 * The minio CI fix (`upstream/ci-install-minio-from-source`) is a clean standalone
   contribution that would unblock everyone's test matrix; upstream currently has
   the same fix buried inside an unrelated feature PR (#22063).
