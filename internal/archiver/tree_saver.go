@@ -123,7 +123,7 @@ func newTreeBuilder(errFn ErrorFunc, expectedEntries int) *treeBuilder {
 // finish completes the tree. It returns either the tree's bytes or, for a tree
 // that was spilled to disk, a reader over it and its size; the caller must call
 // release when done either way.
-func (tb *treeBuilder) finish() (buf []byte, rd io.Reader, size int64, err error) {
+func (tb *treeBuilder) finish() (buf []byte, rd io.ReadSeeker, size int64, err error) {
 	buf, err = tb.builder.Finalize()
 	if err != nil {
 		return nil, nil, 0, err

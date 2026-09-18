@@ -432,16 +432,17 @@ func (r *Repository) sealAndPack(ctx context.Context, t restic.BlobType, data []
 }
 
 // saveBlobFromReader stores a blob whose plaintext is read from rd, which must
-// yield exactly size bytes. The plaintext is hashed and compressed in one pass
-// and never held in one piece, which is what lets a directory far too wide for
-// its tree to fit in memory still be backed up.
-func (r *Repository) saveBlobFromReader(ctx context.Context, t restic.BlobType, rd io.Reader, size int64) (newID restic.ID, known bool, sizeInRepo int, err error) {
+// yield exactly size bytes. The plaintext is never held in one piece, which is
+// what lets a directory far too wide for its tree to fit in memory still be
+// backed up. rd is read twice: once to hash the blob and, only if the repository
+// does not already have it, again to compress it.
+func (r *Repository) saveBlobFromReader(ctx context.Context, t restic.BlobType, rd io.ReadSeeker, size int64) (newID restic.ID, known bool, sizeInRepo int, err error) {
 	if size > math.MaxUint32 {
 		return restic.ID{}, false, 0, fmt.Errorf("blob is larger than 4GB")
 	}
 
-	compressed := size > 0 && r.cfg.Version > 1 && (r.opts.Compression != CompressionOff || t != restic.DataBlob)
-	if !compressed {
+	compress := size > 0 && r.cfg.Version > 1 && (r.opts.Compression != CompressionOff || t != restic.DataBlob)
+	if !compress {
 		// Without compression the plaintext is what gets encrypted, and
 		// encryption needs it in one piece, so there is nothing to stream.
 		buf := make([]byte, size)
@@ -451,30 +452,15 @@ func (r *Repository) saveBlobFromReader(ctx context.Context, t restic.BlobType, 
 		return r.saveBlob(ctx, t, buf, restic.ID{}, false)
 	}
 
-	// Declare the plaintext size in the frame header, as EncodeAll does, so that
-	// whoever reads this blob back can still allocate for it in one go.
-	enc, err := zstd.NewWriter(nil, r.zstdEncoderOptions()...)
-	if err != nil {
-		return restic.ID{}, false, 0, err
-	}
-	defer func() {
-		_ = enc.Close()
-	}()
-
-	// A tree compresses by roughly ten to one; guessing low only costs a resize.
-	out := bytes.NewBuffer(make([]byte, 0, size/8+1024))
-	enc.ResetContentSize(out, size)
-
+	// compute the plaintext hash, in the same order saveBlob does it: a blob the
+	// repository already has then costs no more than reading it.
 	hash := sha256.New()
-	written, err := io.Copy(io.MultiWriter(hash, enc), rd)
+	written, err := io.Copy(hash, rd)
 	if err != nil {
 		return restic.ID{}, false, 0, fmt.Errorf("reading blob contents failed: %w", err)
 	}
 	if written != size {
 		return restic.ID{}, false, 0, fmt.Errorf("blob contents are %d bytes, expected %d", written, size)
-	}
-	if err := enc.Close(); err != nil {
-		return restic.ID{}, false, 0, fmt.Errorf("compression failed: %w", err)
 	}
 	copy(newID[:], hash.Sum(nil))
 
@@ -484,8 +470,53 @@ func (r *Repository) saveBlobFromReader(ctx context.Context, t restic.BlobType, 
 		return newID, known, 0, nil
 	}
 
-	sizeInRepo, err = r.sealAndPack(ctx, t, out.Bytes(), int(size), newID)
+	compressed, err := r.compressFromReader(rd, size)
+	if err != nil {
+		return restic.ID{}, false, 0, err
+	}
+
+	sizeInRepo, err = r.sealAndPack(ctx, t, compressed, int(size), newID)
 	return newID, known, sizeInRepo, err
+}
+
+// compressFromReader compresses size bytes read from the start of rd. The
+// plaintext size is declared in the frame header, as EncodeAll does, so that
+// whoever reads the blob back can still allocate for it in one go.
+func (r *Repository) compressFromReader(rd io.ReadSeeker, size int64) ([]byte, error) {
+	if _, err := rd.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("rewinding blob contents failed: %w", err)
+	}
+
+	enc, err := zstd.NewWriter(nil, r.zstdEncoderOptions()...)
+	if err != nil {
+		return nil, err
+	}
+	// Closing twice would be asking the encoder to finish a stream it has
+	// already finished, so the error paths below close it and the success path
+	// says so.
+	closed := false
+	defer func() {
+		if !closed {
+			_ = enc.Close()
+		}
+	}()
+
+	// A tree compresses by roughly four to one; guessing low only costs a resize.
+	out := bytes.NewBuffer(make([]byte, 0, size/4+1024))
+	enc.ResetContentSize(out, size)
+
+	written, err := io.Copy(enc, rd)
+	if err != nil {
+		return nil, fmt.Errorf("reading blob contents failed: %w", err)
+	}
+	if written != size {
+		return nil, fmt.Errorf("blob contents are %d bytes, expected %d", written, size)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("compression failed: %w", err)
+	}
+	closed = true
+	return out.Bytes(), nil
 }
 
 func (r *Repository) verifyCiphertext(buf []byte, uncompressedLength int, id restic.ID) error {
@@ -725,7 +756,7 @@ func (r *blobSaverRepo) SaveBlobAsync(ctx context.Context, t restic.BlobType, bu
 	r.repo.saveBlobAsync(ctx, t, buf, id, storeDuplicate, cb)
 }
 
-func (r *blobSaverRepo) SaveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.Reader, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
+func (r *blobSaverRepo) SaveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.ReadSeeker, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
 	r.repo.saveBlobFromReaderAsync(ctx, t, rd, size, cb)
 }
 
@@ -1132,7 +1163,7 @@ func (r *Repository) saveBlob(ctx context.Context, t restic.BlobType, buf []byte
 	return newID, known, size, err
 }
 
-func (r *Repository) saveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.Reader, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
+func (r *Repository) saveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.ReadSeeker, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
 	r.mainWg.Go(func() error {
 		if ctx.Err() != nil {
 			// fail fast if the context is cancelled

@@ -448,7 +448,7 @@ func (repo *blobCountingSaver) SaveBlobAsync(ctx context.Context, t restic.BlobT
 	})
 }
 
-func (repo *blobCountingSaver) SaveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.Reader, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
+func (repo *blobCountingSaver) SaveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.ReadSeeker, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
 	repo.saver.SaveBlobFromReaderAsync(ctx, t, rd, size, func(newID restic.ID, known bool, sizeInRepo int, err error) {
 		repo.count(known, restic.BlobHandle{ID: newID, Type: t})
 		cb(newID, known, sizeInRepo, err)
@@ -2334,7 +2334,7 @@ func (f *failSaveSaver) SaveBlobAsync(ctx context.Context, t restic.BlobType, bu
 	})
 }
 
-func (f *failSaveSaver) SaveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.Reader, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
+func (f *failSaveSaver) SaveBlobFromReaderAsync(ctx context.Context, t restic.BlobType, rd io.ReadSeeker, size int64, cb func(newID restic.ID, known bool, size int, err error)) {
 	// limit concurrency to make test reliable
 	f.semaphore <- struct{}{}
 
