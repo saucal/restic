@@ -32,7 +32,7 @@ func (m *mockSaver) SaveBlobAsync(_ context.Context, _ restic.BlobType, buf []by
 	}()
 }
 
-func (m *mockSaver) SaveBlobFromReaderAsync(_ context.Context, _ restic.BlobType, rd io.Reader, size int64, cb func(newID restic.ID, known bool, sizeInRepo int, err error)) {
+func (m *mockSaver) SaveBlobFromReaderAsync(_ context.Context, _ restic.BlobType, rd io.ReadSeeker, size int64, cb func(newID restic.ID, known bool, sizeInRepo int, err error)) {
 	// Fake async operation
 	go func() {
 		buf, err := io.ReadAll(rd)
@@ -198,7 +198,7 @@ type slowReaderSaver struct {
 	readErr   chan error
 }
 
-func (m *slowReaderSaver) SaveBlobFromReaderAsync(_ context.Context, _ restic.BlobType, rd io.Reader, _ int64, cb func(newID restic.ID, known bool, sizeInRepo int, err error)) {
+func (m *slowReaderSaver) SaveBlobFromReaderAsync(_ context.Context, _ restic.BlobType, rd io.ReadSeeker, _ int64, cb func(newID restic.ID, known bool, sizeInRepo int, err error)) {
 	go func() {
 		m.gotReader <- struct{}{}
 		<-m.proceed
