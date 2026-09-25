@@ -1,6 +1,6 @@
 # What a very wide directory costs restic
 
-This is the harness behind the memory work on `upstream/bound-wide-directory-memory`.
+This is the harness behind the memory work proposed upstream.
 It produced every figure quoted there, and it exists because the site that prompted
 the work — one WordPress uploads directory of 1.14M files on a host that kills a
 process at roughly 680 MB — cannot be experimented on.
@@ -71,6 +71,6 @@ One flat directory, zero-byte files, GOMAXPROCS=2 GOGC=20, peak RSS:
 Under a hard 600 MiB cap, 600,000 entries in one directory fails on v0.19.1 and
 succeeds with the work; 1,200,000 succeeds under 400 MiB.
 
-The prediction held on the real host: elka, 940,544 files / 51.6 GiB, backed up at
+The prediction held on the real host that prompted this: 940,544 files / 51.6 GiB, backed up at
 a peak of 272 MB heap / 325 MB total, against 540-683 MB for the runs that were
 killed. Docker had predicted 250-350 MB.
