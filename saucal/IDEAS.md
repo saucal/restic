@@ -130,19 +130,18 @@ the fleet's peak figures will say, now that every backup reports one.
 
 ## Deferred decisions, not features
 
-* Nothing here has been offered upstream yet. `upstream/bound-wide-directory-memory`
-  now carries six commits (bound the pending nodes, verify a large blob without a
-  second copy, spill the tree through a temp file, close that file on every path,
-  do not close it while the repository reads it, hash before compressing) and
-  `upstream/preallocation-guard` one. All of them need issues opened first — restic
-  asks for prior discussion — which also replaces the placeholder numbers in their
-  changelog entries (`pull-99994` through `pull-99999`). The two small fixup commits
-  in the series are worth squashing into the commits they fix at submission time.
-* The wide-directory series is worth splitting across two pull requests rather than
-  one: bounding the pending nodes is a self-contained memory fix that needs no new
-  interface, while spilling the tree adds `SaveBlobFromReaderAsync`. The first would
-  likely go in on its own merits; the second invites a design conversation about a
-  streaming blob API, which the read-path idea above would also want.
-* The minio CI fix (`upstream/ci-install-minio-from-source`) is a clean standalone
-  contribution that would unblock everyone's test matrix; upstream currently has
-  the same fix buried inside an unrelated feature PR (#22063).
+* Nothing has been posted upstream yet, but the submission is drafted and staged:
+  see `saucal/UPSTREAM-PRS.md` for the two issues and four pull request bodies,
+  word for word, and for the branches they go with — `upstream/pr1-bound-pending-nodes`,
+  `upstream/pr2-verify-large-blob`, `upstream/pr3-spill-wide-tree` (stacked on the
+  first two) and `upstream/pr4-preallocation-guard`. All four are rebased on current
+  upstream master, build clean, lint clean, and pass the suite; pull request 3's code
+  is byte for byte what CI proved and what runs in production. The remaining steps are
+  mechanical: open the issue, rename the changelog placeholder to the issue number,
+  push, open the pull request.
+* The minio CI fix is dead. Upstream hit the same dead download — `dl.minio.io` now
+  answers 410 Gone — and fixed it differently in #22067, merged 2026-09-20, replacing
+  minio with seaweedfs. `upstream/ci-install-minio-from-source` can be deleted.
+* The diagnostics branch (`upstream/resource-diagnostics`) is not going upstream as it
+  stands. It is our own instrumentation, a `--diag` surface nobody asked for, and the
+  branch has 40 MB of built binaries committed to `dist/` by accident.
