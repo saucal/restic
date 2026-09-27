@@ -6,6 +6,14 @@ to saucal, to any client, or to how the code was written — acknowledging that
 belongs in the pull request's own words, not in a commit trailer. No session
 links anywhere.
 
+Three separate pull requests for the memory work, not one folded one. Restic's
+review latency scales with size: their open queue has four PRs of 600-1000 lines
+sitting 35-46 days unreviewed, while sub-100-line ones merge within days, and the
+maintainer added PR size labels in #22036 on 2026-09-01. Folded, the memory work
+is one 951-line size/XL PR and the two changes that need no design argument wait
+behind the one that does. Split, pull requests 1 and 2 are size/L and size/M; the
+spill is size/XL either way, since that commit is 597 lines by itself.
+
 Post in this order. The first two stand alone; the third is only worth a
 maintainer's time once they have accepted the first two.
 
@@ -26,17 +34,24 @@ Not proposed:
   branch has 40 MB of built binaries committed to `dist/` by accident. If it
   ever goes up, it needs rebuilding from scratch.
 
-## State of the four branches, as of 2026-09-25
+## State of the four branches, as of 2026-09-27
 
-All four rebased onto `restic/restic` master at `6adedec6b`, which is newer than
-the base they were developed and released on — it includes a klauspost/compress
-bump to 1.20.0, which the zstd code in pull requests 2 and 3 uses. On that base,
-each branch: builds, is `gofmt` clean, passes `golangci-lint run
---new-from-rev=upstream/master` with 0 issues, and passes the test suite. A full
-`go test ./...` on pull request 3 fails exactly the six tests that also fail on
-unmodified master in this environment (`TestMount`, `TestMountSameTimestamps`,
-`TestStdinFromCommand`, `TestStdinFromCommandNoOutput`, `TestNodeRestoreAt`,
-`TestOverwriteXattr` — no OSXFUSE, macOS xattr behaviour) and nothing else.
+All four rebased onto `restic/restic` master at `5127c4abf`, newer than the base
+they were developed and released on — it includes a klauspost/compress bump to
+1.20.0, which the zstd code in pull requests 2 and 3 uses, and go 1.27 in CI. On
+that base, each branch: builds, is `gofmt` clean over the files it touches,
+passes `golangci-lint run --new-from-rev=upstream/master` with 0 issues, and
+passes the test suite. A full `go test ./...` on pull request 3 fails exactly the
+six tests that also fail on unmodified master in this environment (`TestMount`,
+`TestMountSameTimestamps`, `TestStdinFromCommand`,
+`TestStdinFromCommandNoOutput`, `TestNodeRestoreAt`, `TestOverwriteXattr` — no
+OSXFUSE, macOS xattr behaviour) and nothing else.
+
+`gofmt` also flags `internal/backend/s3/s3_test.go`, on pristine master as much
+as on our branches: upstream reformatted it with go 1.27's `gofmt` and the local
+toolchain is 1.26. Not a file any of these branches touches. Rebase again before
+posting if master has moved, and re-run the four checks — upstream is committing
+several times a week.
 
 Pull request 3's code is byte for byte the code that went through the full CI
 matrix and has been running on the real host since; the only differences between
