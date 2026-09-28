@@ -130,15 +130,25 @@ the fleet's peak figures will say, now that every backup reports one.
 
 ## Deferred decisions, not features
 
-* Nothing has been posted upstream yet, but the submission is drafted and staged:
-  see `saucal/UPSTREAM-PRS.md` for the two issues and four pull request bodies,
-  word for word, and for the branches they go with — `upstream/pr1-bound-pending-nodes`,
-  `upstream/pr2-verify-large-blob`, `upstream/pr3-spill-wide-tree` (stacked on the
-  first two) and `upstream/pr4-preallocation-guard`. All four are rebased on current
-  upstream master, build clean, lint clean, and pass the suite; pull request 3's code
-  is byte for byte what CI proved and what runs in production. The remaining steps are
-  mechanical: open the issue, rename the changelog placeholder to the issue number,
-  push, open the pull request.
+* Nothing has been posted upstream yet. `saucal/UPSTREAM-PRS.md` holds the whole
+  submission word for word: a comment on upstream #2446, four draft pull requests
+  (`upstream/pr1-bound-pending-nodes`, `upstream/pr2-verify-large-blob`,
+  `upstream/pr3-spill-wide-tree`, `upstream/pr4-preallocation-guard`) and one new
+  issue for the preallocation hang. All four are rebased on current upstream master,
+  build clean, lint clean, pass the suite and pass `calens`.
+* **The memory problem is upstream #2446, open since 2019, and the maintainer is
+  part-way through his own fix.** #3773 (2022) shrank the structs; #5613 (merged
+  2026-01-31) replaced `data.Tree` with an iterator "in order to eventually be able
+  to chunk trees (#2446)"; #21943 is his open draft adding `object.Reader`/`Writer`
+  for blob sequences, "required to use a sequence of blobs as JSON source/target".
+  Chunked tree blobs are the endgame, and they also fix the `blob is larger than 4GB`
+  failure at 5M entries that our spill does not.
+
+  **What that means for us:** our first two changes are local and stand on their own;
+  the third (`SaveBlobFromReaderAsync` plus the temp file) is the special case of his
+  `object.Writer` and should be offered as a stopgap he is free to refuse. We have
+  offered engineering capacity on his design instead of carrying the fork — that offer
+  is in the #2446 comment draft, and if taken up it becomes the real work here.
 * The minio CI fix is dead. Upstream hit the same dead download — `dl.minio.io` now
   answers 410 Gone — and fixed it differently in #22067, merged 2026-09-20, replacing
   minio with seaweedfs. `upstream/ci-install-minio-from-source` can be deleted.
