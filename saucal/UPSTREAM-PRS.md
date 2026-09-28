@@ -237,12 +237,8 @@ staying entirely yours.
 
 Being straight about what you would be accepting. I am an engineer but not a Go
 developer, I came at this from operating restic rather than from writing it, and I
-work with heavy AI assistance. I am not going to pretend that adds up to good
-judgement about this codebase's design — it does not, and I would not want a format
-decision resting on it. What it does add up to is someone who can follow a
-direction, do mechanical porting, build harnesses, and measure carefully on hosts
-most contributors do not have access to. Tell me what would actually help and what
-would just be noise, and I will work to that.
+work with heavy AI assistance. Tell me what would actually help and what would
+just be noise, and I will work to that.
 
 ---
 
