@@ -125,16 +125,17 @@ Verbatim, at the end of the first section. It is the whole of the disclosure: no
 footnotes, no attribution trailers, no links to anything but restic and the
 harness.
 
-> **How this was written.** I should be upfront about two things. I am not a Go
-> developer — I came to this from the operations side, after production backups
-> started failing — and the code was written with heavy use of an AI coding
-> assistant, read and measured by me at each step. Every number above I measured
-> myself, before and after, on the harness linked here; the change passes the
-> existing test suite along with the tests added here, and it has been running on
-> real backups of the site that prompted it. What I cannot vouch for is that it
-> reads the way a regular contributor's patch would, so please review it as a
-> patch from an outsider to this codebase. I would much rather rework it than have
-> you inherit something subtly wrong.
+> **How this was written.** I am not a Go developer, though I am an engineer. I
+> came at this from operationally using restic to back up WordPress sites, which
+> sometimes hold very large numbers of small thumbnail files in a single
+> directory. I had an AI assistant take a stab at the problem, and what it
+> produced solved my use case — but I am not claiming it is the right solution to
+> the problem, and I know there is a whole universe of use cases I cannot think of
+> or cover, especially without Go-specific knowledge. What I can vouch for is the
+> measuring: every number above I took myself, before and after, on the harness
+> linked here, and the change passes the existing test suite along with the tests
+> added here and has been running on real backups. I can follow directions, so if
+> the shape is wrong, tell me what it should be and I will do the work.
 
 ---
 
@@ -171,6 +172,19 @@ which is the useful diagnostic: the cost is live data, not garbage.
 What sent me here is a WordPress uploads directory of about 1.14M files on managed
 hosting that kills a process at roughly 680 MB. The snapshot is only 51 GiB and
 barely changes, but it had not completed a backup for months.
+
+On the question asked a few times in this thread — whether anyone really has that
+many files *directly* in one directory, and whether they should be reorganising
+instead — WordPress reaches these widths on its own, without anyone mismanaging
+anything. Every upload is written to a flat `wp-content/uploads/YYYY/MM/`
+directory, and WordPress then generates a set of scaled thumbnails for it beside
+the original: the core sizes, plus whatever the active theme and plugins register.
+A site uploading a few thousand images a month accumulates tens of thousands of
+files in that one month directory, and the directory is addressed by URL, so it
+cannot be restructured without breaking every link to it. Nobody chose this
+layout, and the site owner cannot change it. That is why I do not think this only
+affects unusual setups — it is the default shape of the most widely deployed CMS
+on the web, and it gets worse every month a site stays up.
 
 Heap profiles reproduce @shtratos's 2019 breakdown almost exactly — the tree
 object, its JSON, its encrypted copy, plus bookkeeping and paths — with one term
@@ -221,12 +235,14 @@ call sites, the reader side, `Dumper.writeNode`, tests, measurement on directori
 this wide — I have capacity to take pieces on under your direction, with the design
 staying entirely yours.
 
-Being straight about what you would be accepting: I am not a Go developer, I came
-at this from operations, and I work with heavy AI assistance. That makes me decent
-at mechanical porting, at building harnesses, and at measuring things carefully on
-hardware most contributors do not have. It makes me the wrong person to decide the
-format. Tell me what would actually help and what would just be noise, and I will
-work to that.
+Being straight about what you would be accepting. I am an engineer but not a Go
+developer, I came at this from operating restic rather than from writing it, and I
+work with heavy AI assistance. I am not going to pretend that adds up to good
+judgement about this codebase's design — it does not, and I would not want a format
+decision resting on it. What it does add up to is someone who can follow a
+direction, do mechanical porting, build harnesses, and measure carefully on hosts
+most contributors do not have access to. Tell me what would actually help and what
+would just be noise, and I will work to that.
 
 ---
 
