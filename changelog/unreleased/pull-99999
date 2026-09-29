@@ -1,0 +1,14 @@
+Bugfix: Don't hang the restore on a filesystem that never preallocates
+
+Restic reserves space for each file it restores, to keep large files from
+fragmenting. Some sandboxed filesystems, seen on managed WordPress hosting,
+accept that request and never answer it. A restore then stopped at the first
+file that needed data and waited indefinitely, leaving the file empty and
+printing nothing. The file could afterwards not be written, shortened or even
+deleted, and the restore could no longer be stopped, not even with `SIGKILL`.
+
+Restic now finds out whether a filesystem answers such a request before making
+one for a file being restored, and where it does not, restores without
+reserving space. The question is asked once per filesystem.
+
+https://github.com/restic/restic/pull/99999
