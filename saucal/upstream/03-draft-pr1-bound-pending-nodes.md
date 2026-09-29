@@ -28,26 +28,25 @@ Directories no wider than the window behave exactly as before.
 
 Two smaller costs went with it: each entry's name is released once the paths have
 been built from it, and the buffer holding the tree is sized from the directory's
-entry count rather than being grown and copied repeatedly, which held two copies
-of a large tree at once. That second one is worth a warning to anyone else
-measuring this — `bytes.Buffer.Grow` made matters worse, not better, because Go's
-`growSlice` appends onto a fresh allocation and so holds both sizes at once:
-982 MB became 1565 MB before I stopped using it.
+entry count rather than being grown and copied repeatedly, which held two copies of
+a large tree at once. On that second point, `bytes.Buffer.Grow` is the wrong tool
+here: `growSlice` appends onto a fresh allocation and so holds both sizes at once,
+which took a million entries from 982 MB to 1565 MB.
 
 Measured on one flat directory of a million zero-byte files, `GOMAXPROCS=2
 GOGC=20`: peak RSS 1248 MB before, 773 MB after. Backing up 600,000 entries in one
 directory under a hard 600 MiB cap fails before this change and succeeds after it.
 
-The tree written is byte for byte unchanged, which I checked the only way that
-means anything: same repository, second backup with `--force`, root tree ids
-compared, then `check --read-data` and a restore diffed against the source.
-Comparing tree ids across two repositories always shows a difference, because each
-gets its own chunker polynomial — that cost me a false alarm.
+The tree written is byte for byte unchanged: same repository, second backup with
+`--force`, root tree ids compared, then `check --read-data` and a restore diffed
+against the source. Note for anyone reproducing this — tree ids differ across two
+repositories regardless, since each gets its own chunker polynomial, so the
+comparison has to be within one repository.
 
 `TestArchiverSaveDirWide` covers what the window makes different: a directory
 wider than the window, including entries that finish out of order.
 
-The harness behind the numbers, and notes on two ways I first measured this wrong:
+The harness behind the numbers:
 https://github.com/saucal/restic/tree/repro/wide-directory-memory/wide-directory-repro
 
 Happy to fold this changelog entry together with the other two into one

@@ -6,9 +6,9 @@
 
 ## What does this PR change? What problem does it solve?
 
-**Read #2446 first — this is the change I expect you to refuse, and it is opened
-as a draft for that reason.** It is here so the other two have something concrete
-to point at, and so anyone hitting this today has a build that works.
+Read #2446 first for the measurements and the context. This is a draft because it
+overlaps with #21943; it is opened so the other two pull requests have something
+concrete to point at.
 
 **Three commits, and not self-contained: it carries #<pr1>'s and #<pr2>'s
 commits as well as its own.** A pull request from a fork has to be based on a
@@ -47,11 +47,9 @@ your `object.Writer` does generally, and chunked tree blobs make it unnecessary.
 It also does not fix the `blob is larger than 4GB` failure reported on #2446 at
 5M entries, which chunking does.
 
-So I am not asking you to take this on its merits as a design. I am asking
-whether a stopgap is worth having while the real fix lands, given that a
-memory-capped host cannot back up such a directory at all today. If the answer is
-no, close it — the measurements in #2446 are the part I actually care about, and
-#<pr1> and #<pr2> do not depend on this.
+The question is therefore whether this is worth carrying while chunked trees are
+built, given that a memory-capped host cannot back up such a directory at all
+today. If not, close it: #<pr1> and #<pr2> do not depend on it.
 
 One flat directory, zero-byte files, `GOMAXPROCS=2 GOGC=20`, peak RSS:
 
@@ -69,17 +67,16 @@ The tree written is byte for byte unchanged; a restore of it matches the source
 exactly; `check --read-data` passes; and a pristine 0.19.1 binary reads what this
 one writes, in both directions, writing the same tree for the same input.
 
-`TestTreeSaverSpilledTreeSurvivesCancel` covers the ordering this makes it
-possible to get wrong, which I did get wrong first: a cancelled backup returning
-while the repository is still reading the temp file. It reaches the spilling path
+`TestTreeSaverSpilledTreeSurvivesCancel` covers the ordering this change makes it
+possible to get wrong: a cancelled backup returning while the repository is still
+reading the temp file. It reaches the spilling path
 by asking for a directory as wide as the threshold rather than by feeding the
 builder that many nodes, and holds the mock repository's read until after the
 cancellation, so the ordering is deterministic rather than raced.
 
-One thing this does not fix, which I would rather say than have found: the read
-path is still symmetrical to the old write path. Reading a wide directory's tree
-back still materialises the whole blob, so restoring the directory that prompted
-this would still want a few hundred megabytes.
+This does not change the read path. Reading a wide directory's tree back still
+materialises the whole blob, so restoring such a directory still needs a few
+hundred megabytes.
 
 > **How this was written.** I am not a Go developer, though I am an engineer. I
 > came at this from operationally using restic to back up WordPress sites, which

@@ -21,7 +21,8 @@ printed nothing.
 
 Making the call is therefore an irreversible commitment, and no deadline around it
 can take one back: by the time the deadline passes, that file and that process are
-already lost. I built the deadline version first, and that is why this one exists.
+already lost. A deadline-based version was tried first and does not work for this
+reason.
 
 So this asks the filesystem beforehand, with a throwaway file whose name is
 unlinked before the call, from a process that exists only to ask — a re-exec of
@@ -36,10 +37,10 @@ Both callers already treat a failed preallocation as harmless and let the writes
 extend the file, so where the question goes unanswered, restoring simply carries on
 without reserving space.
 
-The part I expect you to dislike is re-execing the binary to ask a question, and
-the hidden argument that makes it possible. I could not find a way to ask that
-cannot take the asking process with it, which is the whole difficulty; if there is
-one, I would much rather use it. `internal/fileio/preallocate_probe_test.go` covers
+The awkward part is re-execing the binary to ask the question, and the hidden
+argument that makes it possible. The difficulty is that any way of asking within
+the process can take that process with it; if there is a way to ask that does not,
+it would be better than this. `internal/fileio/preallocate_probe_test.go` covers
 the probe's own behaviour: a child that never answers (`TestWaitForProbeGivesUp`),
 a binary that does not understand the argument
 (`TestAskProbeProcessDeclinesANonCooperatingBinary`), a reply without the expected

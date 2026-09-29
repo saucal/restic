@@ -24,11 +24,10 @@ What gets verified does not change; only the copy is gone. Below the threshold
 nothing changes, since setting up a streaming decoder is not free and
 decompressing the whole blob is the cheaper way round.
 
-The check is the last thing standing between a corrupt buffer and an upload, so a
-version of it that always passed would be worse than no check at all.
-`TestVerifyCompressedCatchesCorruption` proves the streaming path rejects a wrong
-id, a bit flipped at three different offsets, a truncated stream, and input that
-was never compressed.
+Since this is the last check before a blob is uploaded, a version of it that always
+passed would be worse than none. `TestVerifyCompressedCatchesCorruption` checks
+that the streaming path rejects a wrong id, a bit flipped at three different
+offsets, a truncated stream, and input that was never compressed.
 
 Measured on a backup of one directory of a million entries, peak RSS falls from
 773 MB to 603 MB. Disabling verification entirely reaches 592 MB, so almost all of

@@ -198,8 +198,8 @@ This is the important one. Everything else is optional from their side.
 
 **Body:**
 
-Seven years on, this is still costing people real backups, so here are fresh
-measurements and an offer.
+Measurements on 0.19.1, the shape of directory that produces them, and an offer
+of help at the end.
 
 ## Measurements on 0.19.1
 
@@ -226,18 +226,14 @@ What sent me here is a WordPress uploads directory of about 1.14M files on manag
 hosting that kills a process at roughly 680 MB. The snapshot is only 51 GiB and
 barely changes, but it had not completed a backup for months.
 
-On the question asked a few times in this thread — whether anyone really has that
-many files *directly* in one directory, and whether they should be reorganising
-instead — WordPress reaches these widths on its own, without anyone mismanaging
-anything. Every upload is written to a flat `wp-content/uploads/YYYY/MM/`
-directory, and WordPress then generates a set of scaled thumbnails for it beside
-the original: the core sizes, plus whatever the active theme and plugins register.
-A site uploading a few thousand images a month accumulates tens of thousands of
-files in that one month directory, and the directory is addressed by URL, so it
-cannot be restructured without breaking every link to it. Nobody chose this
-layout, and the site owner cannot change it. That is why I do not think this only
-affects unusual setups — it is the default shape of the most widely deployed CMS
-on the web, and it gets worse every month a site stays up.
+The thread has asked a few times whether anyone really has that many files
+*directly* in one directory. In WordPress this is the default layout rather than a
+choice. Every upload goes into a flat `wp-content/uploads/YYYY/MM/` directory, and
+WordPress generates a set of scaled thumbnails beside the original: the core
+sizes, plus whatever the active theme and plugins register. A site uploading a few
+thousand images a month accumulates tens of thousands of files in that one
+directory, and the count only grows. The directory is addressed by URL, so it
+cannot be restructured without breaking existing links.
 
 Heap profiles reproduce @shtratos's 2019 breakdown almost exactly — the tree
 object, its JSON, its encrypted copy, plus bookkeeping and paths — with one term
@@ -249,9 +245,8 @@ shorten how long the array lives.
 The harness is at
 https://github.com/saucal/restic/tree/repro/wide-directory-memory/wide-directory-repro
 — a generator with a `-per-dir` knob, and scripts that read peak RSS from `VmHWM`
-and re-run each case under a hard cgroup cap so the answer is a verdict rather
-than a number. Its README also records two ways I first measured this wrong, in
-case they save someone else a day.
+and re-run each case under a hard cgroup cap. Its README notes two ways I measured
+this wrong at first, both of which changed the numbers materially.
 
 ## Three changes, measured, in draft pull requests
 
@@ -270,23 +265,21 @@ was being killed. The tree written is byte for byte unchanged throughout, a
 restore matches the source exactly, `check --read-data` passes, and a pristine
 0.19.1 binary reads what these builds write in both directions.
 
-The first two are local and need no format change; I think they stand on their own
-whatever happens to the rest. **The third I expect you to refuse, and I would
-rather say why myself.** It adds `SaveBlobFromReaderAsync` to `BlobSaverAsync` and
-spills the tree to a temp file, which is the special case of what #21943's
-`object.Writer` does generally. It is a stopgap for people stuck today, it is new
-interface surface you would carry and then remove, and it does not fix the
-`blob is larger than 4GB` ceiling that chunked trees will. If chunking is close,
-say so and I will close it.
+The first two are local and need no format change. The third adds
+`SaveBlobFromReaderAsync` to `BlobSaverAsync` and spills the tree to a temp file,
+which is the special case of what #21943's `object.Writer` does generally. Three
+things count against it: it is interface surface you would carry and then remove,
+it does not fix the `blob is larger than 4GB` failure that chunked trees will, and
+it only helps the write path. It is useful today on hosts that cannot complete a
+backup at all. If chunked trees are close, say so and I will close it.
 
 ## The offer
 
-I would much rather help finish your design than carry a patched fork. Having read
-#5613 and #21943, the direction is clear and I am not proposing an alternative to
-it. If any of the work between here and chunked tree blobs parallelises — porting
+I would rather help with the chunked-tree work than maintain a fork. From #5613 and
+#21943 the direction looks clear, and I am not proposing an alternative to it. If
+any of the work between here and chunked tree blobs can be parallelised — porting
 call sites, the reader side, `Dumper.writeNode`, tests, measurement on directories
-this wide — I have capacity to take pieces on under your direction, with the design
-staying entirely yours.
+this wide — I have capacity to take pieces on, with the design decisions yours.
 
 Being straight about what you would be accepting. I am an engineer but not a Go
 developer, I came at this from operating restic rather than from writing it, and I
@@ -303,9 +296,9 @@ just be noise, and I will work to that.
 
 ## What does this PR change? What problem does it solve?
 
-**Read #2446 first — this is the change I expect you to refuse, and it is opened
-as a draft for that reason.** It is here so the other two have something concrete
-to point at, and so anyone hitting this today has a build that works.
+Read #2446 first for the measurements and the context. This is a draft because it
+overlaps with #21943; it is opened so the other two pull requests have something
+concrete to point at.
 
 **Three commits, and not self-contained: it carries #\<pr1\>'s and #\<pr2\>'s
 commits as well as its own.** A pull request from a fork has to be based on a
@@ -344,11 +337,9 @@ your `object.Writer` does generally, and chunked tree blobs make it unnecessary.
 It also does not fix the `blob is larger than 4GB` failure reported on #2446 at
 5M entries, which chunking does.
 
-So I am not asking you to take this on its merits as a design. I am asking
-whether a stopgap is worth having while the real fix lands, given that a
-memory-capped host cannot back up such a directory at all today. If the answer is
-no, close it — the measurements in #2446 are the part I actually care about, and
-#\<pr1\> and #\<pr2\> do not depend on this.
+The question is therefore whether this is worth carrying while chunked trees are
+built, given that a memory-capped host cannot back up such a directory at all
+today. If not, close it: #\<pr1\> and #\<pr2\> do not depend on it.
 
 One flat directory, zero-byte files, `GOMAXPROCS=2 GOGC=20`, peak RSS:
 
@@ -366,17 +357,16 @@ The tree written is byte for byte unchanged; a restore of it matches the source
 exactly; `check --read-data` passes; and a pristine 0.19.1 binary reads what this
 one writes, in both directions, writing the same tree for the same input.
 
-`TestTreeSaverSpilledTreeSurvivesCancel` covers the ordering this makes it
-possible to get wrong, which I did get wrong first: a cancelled backup returning
-while the repository is still reading the temp file. It reaches the spilling path
+`TestTreeSaverSpilledTreeSurvivesCancel` covers the ordering this change makes it
+possible to get wrong: a cancelled backup returning while the repository is still
+reading the temp file. It reaches the spilling path
 by asking for a directory as wide as the threshold rather than by feeding the
 builder that many nodes, and holds the mock repository's read until after the
 cancellation, so the ordering is deterministic rather than raced.
 
-One thing this does not fix, which I would rather say than have found: the read
-path is still symmetrical to the old write path. Reading a wide directory's tree
-back still materialises the whole blob, so restoring the directory that prompted
-this would still want a few hundred megabytes.
+This does not change the read path. Reading a wide directory's tree back still
+materialises the whole blob, so restoring such a directory still needs a few
+hundred megabytes.
 
 > **How this was written.** [the note, verbatim]
 
@@ -416,26 +406,25 @@ Directories no wider than the window behave exactly as before.
 
 Two smaller costs went with it: each entry's name is released once the paths have
 been built from it, and the buffer holding the tree is sized from the directory's
-entry count rather than being grown and copied repeatedly, which held two copies
-of a large tree at once. That second one is worth a warning to anyone else
-measuring this — `bytes.Buffer.Grow` made matters worse, not better, because Go's
-`growSlice` appends onto a fresh allocation and so holds both sizes at once:
-982 MB became 1565 MB before I stopped using it.
+entry count rather than being grown and copied repeatedly, which held two copies of
+a large tree at once. On that second point, `bytes.Buffer.Grow` is the wrong tool
+here: `growSlice` appends onto a fresh allocation and so holds both sizes at once,
+which took a million entries from 982 MB to 1565 MB.
 
 Measured on one flat directory of a million zero-byte files, `GOMAXPROCS=2
 GOGC=20`: peak RSS 1248 MB before, 773 MB after. Backing up 600,000 entries in one
 directory under a hard 600 MiB cap fails before this change and succeeds after it.
 
-The tree written is byte for byte unchanged, which I checked the only way that
-means anything: same repository, second backup with `--force`, root tree ids
-compared, then `check --read-data` and a restore diffed against the source.
-Comparing tree ids across two repositories always shows a difference, because each
-gets its own chunker polynomial — that cost me a false alarm.
+The tree written is byte for byte unchanged: same repository, second backup with
+`--force`, root tree ids compared, then `check --read-data` and a restore diffed
+against the source. Note for anyone reproducing this — tree ids differ across two
+repositories regardless, since each gets its own chunker polynomial, so the
+comparison has to be within one repository.
 
 `TestArchiverSaveDirWide` covers what the window makes different: a directory
 wider than the window, including entries that finish out of order.
 
-The harness behind the numbers, and notes on two ways I first measured this wrong:
+The harness behind the numbers:
 https://github.com/saucal/restic/tree/repro/wide-directory-memory/wide-directory-repro
 
 Happy to fold this changelog entry together with the other two into one
@@ -475,11 +464,10 @@ What gets verified does not change; only the copy is gone. Below the threshold
 nothing changes, since setting up a streaming decoder is not free and
 decompressing the whole blob is the cheaper way round.
 
-The check is the last thing standing between a corrupt buffer and an upload, so a
-version of it that always passed would be worse than no check at all.
-`TestVerifyCompressedCatchesCorruption` proves the streaming path rejects a wrong
-id, a bit flipped at three different offsets, a truncated stream, and input that
-was never compressed.
+Since this is the last check before a blob is uploaded, a version of it that always
+passed would be worse than none. `TestVerifyCompressedCatchesCorruption` checks
+that the streaming path rejects a wrong id, a bit flipped at three different
+offsets, a truncated stream, and input that was never compressed.
 
 Measured on a backup of one directory of a million entries, peak RSS falls from
 773 MB to 603 MB. Disabling verification entirely reaches 592 MB, so almost all of
@@ -577,7 +565,8 @@ printed nothing.
 
 Making the call is therefore an irreversible commitment, and no deadline around it
 can take one back: by the time the deadline passes, that file and that process are
-already lost. I built the deadline version first, and that is why this one exists.
+already lost. A deadline-based version was tried first and does not work for this
+reason.
 
 So this asks the filesystem beforehand, with a throwaway file whose name is
 unlinked before the call, from a process that exists only to ask — a re-exec of
@@ -592,10 +581,10 @@ Both callers already treat a failed preallocation as harmless and let the writes
 extend the file, so where the question goes unanswered, restoring simply carries on
 without reserving space.
 
-The part I expect you to dislike is re-execing the binary to ask a question, and
-the hidden argument that makes it possible. I could not find a way to ask that
-cannot take the asking process with it, which is the whole difficulty; if there is
-one, I would much rather use it. `internal/fileio/preallocate_probe_test.go` covers
+The awkward part is re-execing the binary to ask the question, and the hidden
+argument that makes it possible. The difficulty is that any way of asking within
+the process can take that process with it; if there is a way to ask that does not,
+it would be better than this. `internal/fileio/preallocate_probe_test.go` covers
 the probe's own behaviour: a child that never answers (`TestWaitForProbeGivesUp`),
 a binary that does not understand the argument
 (`TestAskProbeProcessDeclinesANonCooperatingBinary`), a reply without the expected

@@ -4,8 +4,8 @@
 <!-- Everything below the next line is the body, verbatim. Replace the #<...> placeholders. -->
 <!-- ----------------------------------------------------------------- -->
 
-Seven years on, this is still costing people real backups, so here are fresh
-measurements and an offer.
+Measurements on 0.19.1, the shape of directory that produces them, and an offer
+of help at the end.
 
 ## Measurements on 0.19.1
 
@@ -32,18 +32,14 @@ What sent me here is a WordPress uploads directory of about 1.14M files on manag
 hosting that kills a process at roughly 680 MB. The snapshot is only 51 GiB and
 barely changes, but it had not completed a backup for months.
 
-On the question asked a few times in this thread — whether anyone really has that
-many files *directly* in one directory, and whether they should be reorganising
-instead — WordPress reaches these widths on its own, without anyone mismanaging
-anything. Every upload is written to a flat `wp-content/uploads/YYYY/MM/`
-directory, and WordPress then generates a set of scaled thumbnails for it beside
-the original: the core sizes, plus whatever the active theme and plugins register.
-A site uploading a few thousand images a month accumulates tens of thousands of
-files in that one month directory, and the directory is addressed by URL, so it
-cannot be restructured without breaking every link to it. Nobody chose this
-layout, and the site owner cannot change it. That is why I do not think this only
-affects unusual setups — it is the default shape of the most widely deployed CMS
-on the web, and it gets worse every month a site stays up.
+The thread has asked a few times whether anyone really has that many files
+*directly* in one directory. In WordPress this is the default layout rather than a
+choice. Every upload goes into a flat `wp-content/uploads/YYYY/MM/` directory, and
+WordPress generates a set of scaled thumbnails beside the original: the core
+sizes, plus whatever the active theme and plugins register. A site uploading a few
+thousand images a month accumulates tens of thousands of files in that one
+directory, and the count only grows. The directory is addressed by URL, so it
+cannot be restructured without breaking existing links.
 
 Heap profiles reproduce @shtratos's 2019 breakdown almost exactly — the tree
 object, its JSON, its encrypted copy, plus bookkeeping and paths — with one term
@@ -55,9 +51,8 @@ shorten how long the array lives.
 The harness is at
 https://github.com/saucal/restic/tree/repro/wide-directory-memory/wide-directory-repro
 — a generator with a `-per-dir` knob, and scripts that read peak RSS from `VmHWM`
-and re-run each case under a hard cgroup cap so the answer is a verdict rather
-than a number. Its README also records two ways I first measured this wrong, in
-case they save someone else a day.
+and re-run each case under a hard cgroup cap. Its README notes two ways I measured
+this wrong at first, both of which changed the numbers materially.
 
 ## Three changes, measured, in draft pull requests
 
@@ -76,23 +71,21 @@ was being killed. The tree written is byte for byte unchanged throughout, a
 restore matches the source exactly, `check --read-data` passes, and a pristine
 0.19.1 binary reads what these builds write in both directions.
 
-The first two are local and need no format change; I think they stand on their own
-whatever happens to the rest. **The third I expect you to refuse, and I would
-rather say why myself.** It adds `SaveBlobFromReaderAsync` to `BlobSaverAsync` and
-spills the tree to a temp file, which is the special case of what #21943's
-`object.Writer` does generally. It is a stopgap for people stuck today, it is new
-interface surface you would carry and then remove, and it does not fix the
-`blob is larger than 4GB` ceiling that chunked trees will. If chunking is close,
-say so and I will close it.
+The first two are local and need no format change. The third adds
+`SaveBlobFromReaderAsync` to `BlobSaverAsync` and spills the tree to a temp file,
+which is the special case of what #21943's `object.Writer` does generally. Three
+things count against it: it is interface surface you would carry and then remove,
+it does not fix the `blob is larger than 4GB` failure that chunked trees will, and
+it only helps the write path. It is useful today on hosts that cannot complete a
+backup at all. If chunked trees are close, say so and I will close it.
 
 ## The offer
 
-I would much rather help finish your design than carry a patched fork. Having read
-#5613 and #21943, the direction is clear and I am not proposing an alternative to
-it. If any of the work between here and chunked tree blobs parallelises — porting
+I would rather help with the chunked-tree work than maintain a fork. From #5613 and
+#21943 the direction looks clear, and I am not proposing an alternative to it. If
+any of the work between here and chunked tree blobs can be parallelised — porting
 call sites, the reader side, `Dumper.writeNode`, tests, measurement on directories
-this wide — I have capacity to take pieces on under your direction, with the design
-staying entirely yours.
+this wide — I have capacity to take pieces on, with the design decisions yours.
 
 Being straight about what you would be accepting. I am an engineer but not a Go
 developer, I came at this from operating restic rather than from writing it, and I
