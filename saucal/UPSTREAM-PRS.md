@@ -1,6 +1,12 @@
 # What we are proposing upstream, and in what words
 
-Nothing is posted. Everything below is paste-ready and waiting on review.
+**Nothing is posted.** This file is the working document: the bodies plus the
+reasoning behind them, the upstream research, the branch state and the mechanics.
+
+**The text that actually gets posted lives in `saucal/upstream/`** — one file per
+artifact, in posting order, body only, nothing to strip out. See
+`saucal/upstream/README.md`. Regenerate those files from this one if you edit the
+bodies here.
 
 One comment on an existing issue, four draft pull requests, one new issue. All
 four branches are built on `restic/restic` master and carry no reference to this
@@ -179,10 +185,10 @@ harness.
 > produced solved my use case — but I am not claiming it is the right solution to
 > the problem, and I know there is a whole universe of use cases I cannot think of
 > or cover, especially without Go-specific knowledge. What I can vouch for is the
-> measuring: every number above I took myself, before and after, on the harness
-> linked here, and the change passes the existing test suite along with the tests
-> added here and has been running on real backups. I can follow directions, so if
-> the shape is wrong, tell me what it should be and I will do the work.
+> measuring: the numbers above are ones I took myself, before and after, and the
+> change passes the existing test suite along with the tests added here and has
+> been running on real backups. I can follow directions, so if the shape is wrong,
+> tell me what it should be and I will do the work.
 
 ---
 
@@ -301,9 +307,11 @@ just be noise, and I will work to that.
 as a draft for that reason.** It is here so the other two have something concrete
 to point at, and so anyone hitting this today has a build that works.
 
-**It also carries #\<pr1\> and #\<pr2\>'s commits**, because a pull request from a
-fork has to be based on a branch in this repository, so it cannot be stacked. Only
-the third commit is new here. Once those two land, a rebase leaves one commit.
+**Three commits, and not self-contained: it carries #\<pr1\>'s and #\<pr2\>'s
+commits as well as its own.** A pull request from a fork has to be based on a
+branch in this repository, so there is no way to stack it and show you only the
+third commit, which is the only new work here. Once those two land, a rebase drops
+the duplicates and leaves one commit.
 
 A directory's tree is one blob listing every entry, a few hundred bytes each, and
 it was built in memory: held while the directory was walked, then compressed and
@@ -386,9 +394,10 @@ this would still want a few hundred megabytes.
 
 ## What does this PR change? What problem does it solve?
 
-One of three changes measured on #2446; this is the one I think stands on its own
-whatever happens to the others, since it needs no format change and adds no
-interface. It picks up where #3773 stopped.
+One of three changes measured on #2446. **One commit, self-contained:** it does
+not depend on #\<pr2\> or #\<pr3\> and can be merged on its own, in any order. It
+needs no format change and adds no interface, and it picks up where #3773
+stopped.
 
 `saveDir` submitted every entry of a directory and folded the results into the
 directory's tree only once the whole directory had been walked, so a finished entry
@@ -448,10 +457,12 @@ Happy to fold this changelog entry together with the other two into one
 
 ## What does this PR change? What problem does it solve?
 
-One of three changes measured on #2446. This is the "encrypted variant" term
-@shtratos identified there in 2019 and #3773 named but did not address. It is
-independent of the other two and of #21943 — it helps any large blob, not only a
-wide directory's tree.
+One of three changes measured on #2446. **One commit, self-contained:** it does
+not depend on #\<pr1\> or #\<pr3\> and can be merged on its own, in any order.
+
+This is the "encrypted variant" term @shtratos identified on #2446 in 2019 and
+#3773 named but did not address. It is independent of #21943 too — it helps any
+large blob, not only a wide directory's tree.
 
 `verifyCiphertext` decrypted and decompressed the blob it had just sealed and
 rehashed it, holding the whole plaintext a second time to do so. For a large tree
@@ -550,6 +561,9 @@ reserving space. Draft pull request to follow.
 **Open as: draft**
 
 ## What does this PR change? What problem does it solve?
+
+**One commit, self-contained**, and unrelated to the memory work on #2446 —
+different subsystem, no shared files.
 
 The restorer reserves space for each file before filling it, so that writing its
 blobs out of order does not fragment it. Some sandboxed filesystems, seen on
