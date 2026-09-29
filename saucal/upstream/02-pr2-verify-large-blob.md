@@ -19,9 +19,10 @@ Directory of 1M entries, with #<pr1> applied: 773 MB to 603 MB peak RSS (592 MB 
 
 #2446
 
-## Checklist
+Checklist
+---------
 
-- [x] I have added tests for all code changes
-- [ ] I have added documentation for relevant changes (in the manual)
-- [x] There's a new file in `changelog/unreleased/`
+- [x] I have added tests for all code changes, see [writing tests](https://restic.readthedocs.io/en/stable/090_participating.html#writing-tests)
+- [ ] I have added documentation for relevant changes (in the manual). *Not applicable: no options or commands change.*
+- [x] There's a new file in `changelog/unreleased/` that describes the changes for our users (see [template](https://github.com/restic/restic/blob/master/changelog/TEMPLATE)).
 - [x] I'm done! This pull request is ready for review.
