@@ -5,7 +5,7 @@
 
 Closes #<issue>. One commit, self-contained; unrelated to #2446.
 
-On some sandboxed filesystems `fallocate` is accepted and never answered. The calling thread then can't be interrupted, not even by `SIGKILL`, and the file's inode stays locked, so a timeout around the call can't recover. The call must not be made. Details in #<issue>.
+`fallocate` can be accepted by a filesystem and never return. The calling thread then can't be interrupted, not even by `SIGKILL`, and the file's inode stays locked, so a timeout around the call can't recover. Preallocation is optional, though: the file can be written without it. So the fix is to not make the call where it would hang. Details in #<issue>.
 
 This asks first: a child process (the restic binary re-executed with a hidden `--__preallocate-probe <dir>` argument, handled at the top of `main` before flag parsing) preallocates a throwaway, already-unlinked file in the target directory. If it doesn't answer within 5 s, preallocation is skipped on that filesystem. The result is cached per filesystem. Both callers already treat a failed preallocation as harmless, so the restore continues without reserving space.
 
