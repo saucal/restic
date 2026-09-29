@@ -1,6 +1,17 @@
 # Upstream submission — notes
 
-The text to post is in `saucal/upstream/`. Nothing here gets posted.
+**Posted 2026-09-29.** The text as posted is in `saucal/upstream/`.
+
+| | what | branch |
+|---|---|---|
+| restic/restic#22080 | bound pending nodes, ready | `upstream/pr1-bound-pending-nodes` |
+| restic/restic#22081 | verify large blob, ready | `upstream/pr2-verify-large-blob` |
+| restic/restic#22082 | whole memory solution (carries the two above), draft | `upstream/pr3-spill-wide-tree` |
+| restic/restic#2446 comment 5899856389 | measurements, links, offer to help with chunked trees | — |
+| restic/restic#22083 | issue: fallocate never returns | — |
+| restic/restic#22084 | preallocation guard, ready, closes #22083 | `upstream/pr4-preallocation-guard` |
+
+If #22080 or #22081 change after review, rebuild #22082 from them (PR1 commit + cherry-pick PR2 + the spill commit). A maintainer must approve the first test run.
 
 ## Context
 
