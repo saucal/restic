@@ -54,6 +54,53 @@ his design instead.
 [#5613]: https://github.com/restic/restic/pull/5613
 [#21943]: https://github.com/restic/restic/pull/21943
 
+## Which pull request contains which — read this first
+
+Three of the four are self-contained. One is not.
+
+```
+restic/restic master
+  |
+  +-- PR 1  archiver: Bound the memory a wide directory costs
+  |         SELF-CONTAINED. 1 commit. Merges on its own, in any order.
+  |
+  +-- PR 2  repository: Verify a large blob without a second copy of it
+  |         SELF-CONTAINED. 1 commit. Merges on its own, in any order.
+  |         Independent of PR 1 -- neither contains the other.
+  |
+  +-- PR 3  archiver: Write a very wide directory's tree through a temp file
+  |         NOT self-contained. 3 commits:
+  |             1. PR 1's commit        <- duplicate
+  |             2. PR 2's commit        <- duplicate
+  |             3. the spill commit     <- the only new work, 10 files, 568+/38-
+  |         Needs PR 1 and PR 2 merged first; a rebase then drops the
+  |         duplicates and leaves one commit.
+  |
+  +-- PR 4  restore: Don't hang on a filesystem that never preallocates
+            SELF-CONTAINED. 1 commit. Unrelated to the other three --
+            different subsystem, different issue, no shared files.
+```
+
+| | commits | self-contained | contains | merge order |
+| - | ------- | -------------- | -------- | ----------- |
+| PR 1 | 1 | yes | — | any time |
+| PR 2 | 1 | yes | — | any time |
+| PR 3 | 3 | **no** | PR 1 + PR 2 | after both, then rebase |
+| PR 4 | 1 | yes | — | any time |
+
+Verified by patch-id, not by reading: PR 1's and PR 2's changes are present in
+PR 3 byte for byte.
+
+**Why PR 3 cannot simply be based on PR 1.** A pull request from a fork must be
+based on a branch in `restic/restic`, so there is no way to make GitHub show only
+the third commit. Until PR 1 and PR 2 merge, anyone opening PR 3 sees 13 files and
+871+/83- — which is why its body says so in the first paragraph, and why the diff
+of just the new commit is kept separately for our own review.
+
+**If they ask for it all in one pull request instead**, PR 3 already *is* that
+pull request. Nothing needs rebuilding: mark it ready, close PR 1 and PR 2 as
+superseded, and two pull requests merge in total — PR 3 and PR 4.
+
 ## Posting sequence
 
 | step | what | why in this order |
