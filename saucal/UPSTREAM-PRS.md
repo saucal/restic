@@ -11,6 +11,8 @@
 | restic/restic#22083 | issue: fallocate never returns | — |
 | restic/restic#22084 | preallocation guard, ready, closes #22083 | `upstream/pr4-preallocation-guard` |
 
+**Maintainer response 2026-10-11, our replies 2026-10-13** (`saucal/upstream/replies-2026-10-13.md`): the proper fix is his repository format v3. #22080 and #22082 closed by us; #22081 open with allocation measurements justifying the two verify paths, his call; #22084 closed by him for lacking a realistic case; on #22083 we gave the real case (Pressable / WP Cloud, process killable there) and asked whether a plain option to turn preallocation off would be acceptable. Fork carries everything until v3. Revisit when the v3 PR appears.
+
 If #22080 or #22081 change after review, rebuild #22082 from them (PR1 commit + cherry-pick PR2 + the spill commit). A maintainer must approve the first test run.
 
 ## Context
