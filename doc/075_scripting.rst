@@ -41,6 +41,8 @@ environment variables, which are listed below.
     RESTIC_PROGRESS_FPS                 Frames per second by which the progress bar is updated
     RESTIC_PACK_SIZE                    Target size for pack files
     RESTIC_READ_CONCURRENCY             Concurrency for file reads
+    RESTIC_DIAG_LOG                     Write memory diagnostics for this run to this file
+    RESTIC_DIAG_INTERVAL                How often to record them (default 10s)
 
     RESTIC_FROM_REPOSITORY              Source repository for copy (replaces --from-repo)
     RESTIC_FROM_REPOSITORY_FILE         File containing source repository for copy (replaces --from-repository-file)

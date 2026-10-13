@@ -1,0 +1,15 @@
+Enhancement: Recognise an unchanged wide directory without recompressing its tree
+
+When restic saves a blob it hashes it, checks whether the repository already has
+that blob, and only compresses and stores it if not. The streaming path added for
+very wide directories could not do that, because it needed to compress in order to
+hash, so the tree of an unchanged wide directory was compressed again on every
+backup even though it was then discarded.
+
+Such a tree is now hashed first and compressed only if the repository does not
+already have it, which is the order used for every other blob. Recognising a tree
+the repository already holds is between two and six times cheaper, the larger
+difference being for trees whose content ids make them compress poorly, which is
+what a real directory of files looks like.
+
+https://github.com/restic/restic/pull/99994

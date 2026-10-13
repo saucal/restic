@@ -1,0 +1,13 @@
+Enhancement: Verify a large blob without a second copy of it in memory
+
+Before a blob is uploaded, restic decrypts and decompresses it again and checks
+that it still hashes to the same value, which catches corruption from faulty
+memory or a software bug. For a large blob that check decompressed the whole
+thing into memory a second time, doubling what the blob cost while it was being
+saved. The tree of a directory with a million entries runs to several hundred
+megabytes, so this was enough to push a memory-capped host over the edge.
+
+Blobs above 16 MiB are now hashed as they decompress, so verification no longer
+depends on the blob's size. Nothing about what is verified has changed.
+
+https://github.com/restic/restic/pull/99996
